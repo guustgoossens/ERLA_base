@@ -1,10 +1,17 @@
 """Paper summarization using LLM."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from .semantic_scholar import PaperDetails
 from .llm import OpenRouterAdapter, LLMProvider
+
+if TYPE_CHECKING:
+    from .orchestration import Overseer
+    from .halugate import HallucinationResult
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +25,7 @@ async def summarize_paper(
     provider: LLMProvider | None = None,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     temperature: float = 0.3,
+    guidance: str | None = None,
 ) -> str:
     """
     Summarize a single paper using LLM.
@@ -27,6 +35,7 @@ async def summarize_paper(
         provider: LLM provider (defaults to OpenRouterAdapter)
         system_prompt: System prompt for summarization
         temperature: LLM temperature
+        guidance: Optional guidance to steer summarization (e.g., "be more conservative")
 
     Returns:
         Summary string
@@ -39,12 +48,15 @@ async def summarize_paper(
     if len(content) > max_chars:
         content = content[:max_chars] + "\n\n[Content truncated...]"
 
+    # Build prompt with optional guidance
+    guidance_section = f"\n\nGuidance: {guidance}" if guidance else ""
+
     prompt = f"""Paper: {paper.title}
 Authors: {', '.join(a.name or 'Unknown' for a in paper.authors[:5])}
 Year: {paper.year}
 
 Content:
-{content}
+{content}{guidance_section}
 
 Provide a concise summary."""
 
@@ -105,3 +117,23 @@ async def summarize_papers(
                     await summarize_paper(paper, llm, system_prompt, temperature)
                     for paper in papers
                 ]
+
+
+async def summarize_paper_validated(
+    paper: PaperDetails,
+    overseer: Overseer,
+) -> tuple[str, HallucinationResult, float]:
+    """
+    Summarize a paper with automatic validation and retry.
+
+    This is a convenience function that uses the Overseer to generate
+    a summary with hallucination detection and automatic retry if needed.
+
+    Args:
+        paper: Paper to summarize (with full_text or abstract)
+        overseer: Overseer instance for validation
+
+    Returns:
+        Tuple of (summary, hallucination_result, groundedness_score)
+    """
+    return await overseer.summarize_with_validation(paper)

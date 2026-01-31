@@ -13,4 +13,5 @@ dependencies = [
     "lettucedetect>=0.1.8",  # Token-level hallucination detection
     "transformers>=4.40",  # NLI model
     "torch>=2.0",  # PyTorch backend
+    "pyyaml>=6.0",  # YAML config loading
 ]

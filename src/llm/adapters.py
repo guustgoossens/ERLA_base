@@ -4,7 +4,7 @@ import logging
 
 from openai import AsyncOpenAI
 
-from ..config import (
+from ..settings import (
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
     OPENROUTER_DEFAULT_MODEL,

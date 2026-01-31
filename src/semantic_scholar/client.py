@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from ..config import (
+from ..settings import (
     SEMANTIC_SCHOLAR_API_KEY,
     SEMANTIC_SCHOLAR_BASE_URL,
     RATE_LIMIT_REQUESTS_PER_SECOND,

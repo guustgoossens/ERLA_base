@@ -1,0 +1,79 @@
+# Model Configuration Profiles
+#
+# This file defines named configuration profiles for different deployment scenarios.
+# Switch between profiles using the MODEL_PROFILE environment variable:
+#
+#   MODEL_PROFILE=dev-fast python test_integration.py
+#   MODEL_PROFILE=dev-accurate python test_integration.py
+#   MODEL_PROFILE=prod python test_integration.py
+#
+# Environment variable expansion is supported using ${VAR} syntax.
+
+profiles:
+  # Fast iteration profile - mock validators for quick testing
+  # Uses real summarizer but mock hallucination detection
+  dev-fast:
+    summarizer:
+      backend: openrouter
+      model: upstage/solar-pro-3:free
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0  # No retries with mock
+
+  # Accurate development profile - all real models in-process
+  # Full 3-stage HaluGate pipeline with sentinel, detector, and NLI
+  dev-accurate:
+    summarizer:
+      backend: openrouter
+      model: upstage/solar-pro-3:free
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: local
+      use_sentinel: true
+      device: cpu
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.8
+
+  # Production profile - distributed deployment
+  # Requires running HaluGate as separate HTTP service
+  prod:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-5-sonnet
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: http
+      url: http://halugate-service:8000
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.85
+
+  # Testing profile - all mocks for fast automated tests
+  test:
+    summarizer:
+      backend: mock
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+
+  # Local HTTP profile - test distributed architecture locally
+  # Start HaluGate server with: python -m src.halugate.server &
+  local-http:
+    summarizer:
+      backend: openrouter
+      model: upstage/solar-pro-3:free
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: http
+      url: http://localhost:8000
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.8
