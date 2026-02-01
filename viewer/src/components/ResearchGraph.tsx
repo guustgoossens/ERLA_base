@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { useQuery } from "convex/react";
-import ForceGraph3D, { ForceGraphMethods } from "react-force-graph-3d";
+import ForceGraph3D from "react-force-graph-3d";
 import * as THREE from "three";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -34,7 +34,8 @@ type LinkData = {
 export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
   const graphData = useQuery(api.graph.getFullGraph, { sessionId });
   const session = useQuery(api.sessions.getById, { id: sessionId });
-  const fgRef = useRef<ForceGraphMethods<NodeData, LinkData>>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fgRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
   const [hoverNode, setHoverNode] = useState<NodeData | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });

@@ -54,6 +54,33 @@ profiles:
       max_retries: 2
       groundedness_threshold: 0.85
 
+  # Claude Haiku - fast and cheap via OpenRouter
+  dev-haiku:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-haiku-20240307
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+
+  # Claude Haiku with real validation
+  dev-haiku-accurate:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-haiku-20240307
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: local
+      use_sentinel: true
+      device: cpu
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.8
+
   # Testing profile - all mocks for fast automated tests
   test:
     summarizer:
@@ -141,6 +168,77 @@ profiles:
         include_references: true
       branch:
         max_context_window: 128000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 10
+        max_branches: 10
+      master_agent:
+        max_parallel_branches: 5
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+
+  # Research with Claude Haiku - fast iteration
+  research-haiku:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-haiku-20240307
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 10
+        parallel_summarization: true
+        max_summarization_concurrency: 5
+      iteration_loop:
+        max_iterations_per_branch: 5
+        citation_depth: 2
+        max_citations_per_paper: 3
+        max_references_per_paper: 3
+        include_references: false
+      branch:
+        max_context_window: 200000  # Haiku supports 200k context
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 5
+        max_branches: 5
+      master_agent:
+        max_parallel_branches: 3
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+
+  # Research with Claude Haiku - accurate with real HaluGate
+  research-haiku-accurate:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-haiku-20240307
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: local
+      use_sentinel: true
+      device: cpu
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.8
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 20
+        parallel_summarization: true
+        max_summarization_concurrency: 5
+      iteration_loop:
+        max_iterations_per_branch: 10
+        citation_depth: 2
+        max_citations_per_paper: 10
+        max_references_per_paper: 10
+        include_references: true
+      branch:
+        max_context_window: 200000
         context_split_threshold: 0.8
         min_papers_for_hypothesis_mode: 10
         max_branches: 10

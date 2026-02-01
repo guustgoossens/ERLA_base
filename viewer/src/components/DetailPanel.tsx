@@ -112,13 +112,13 @@ export function DetailPanel({ node }: DetailPanelProps) {
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
-          {data.year && (
+          {(data.year as number | undefined) && (
             <div>
               <label className="text-xs text-gray-500 uppercase">Year</label>
               <p className="text-gray-200 text-sm">{data.year as number}</p>
             </div>
           )}
-          {data.citationCount !== undefined && (
+          {(data.citationCount as number | undefined) !== undefined && (
             <div>
               <label className="text-xs text-gray-500 uppercase">Citations</label>
               <p className="text-gray-200 text-sm">{data.citationCount as number}</p>
@@ -131,7 +131,7 @@ export function DetailPanel({ node }: DetailPanelProps) {
           </label>
           <ProgressBar value={data.groundedness as number} color={node.color} />
         </div>
-        {data.paperId && (
+        {(data.paperId as string | undefined) && (
           <a
             href={`https://www.semanticscholar.org/paper/${data.paperId}`}
             target="_blank"
