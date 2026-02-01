@@ -149,20 +149,30 @@ class ConvexClient:
     # Session Management
     # ==========================================================================
 
-    async def create_session(self, session_id: str, initial_query: str) -> str | None:
+    async def create_session(
+        self,
+        session_id: str,
+        initial_query: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> str | None:
         """Create a new research session.
 
         Args:
             session_id: Unique session identifier (loop_id)
             initial_query: The initial research query
+            parameters: Optional research parameters to store
 
         Returns:
             The Convex document ID for the session
         """
-        result = await self.mutation(
-            "sessions:create",
-            {"sessionId": session_id, "initialQuery": initial_query},
-        )
+        args = {
+            "sessionId": session_id,
+            "initialQuery": initial_query,
+        }
+        if parameters:
+            args["parameters"] = parameters
+
+        result = await self.mutation("sessions:create", args)
         self._session_doc_id = result
         self._session_string_id = session_id
         logger.info(f"Created Convex session: {result}")

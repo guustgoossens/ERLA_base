@@ -295,7 +295,7 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
             {isReplayMode ? "Replay" : session.status}
           </div>
         </div>
-        <StatsPanel stats={displayStats ?? graphData.stats} />
+        <StatsPanel stats={displayStats ?? graphData.stats} session={session ?? undefined} />
 
         {/* Replay Controls at bottom of left sidebar */}
         <div className="mt-auto">

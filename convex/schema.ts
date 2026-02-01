@@ -14,6 +14,15 @@ export default defineSchema({
     ),
     createdAt: v.number(),
     updatedAt: v.number(),
+    parameters: v.optional(
+      v.object({
+        profile: v.optional(v.string()),
+        max_iterations: v.optional(v.number()),
+        start_date: v.optional(v.string()),
+        end_date: v.optional(v.string()),
+        use_managing_agent: v.optional(v.boolean()),
+      })
+    ),
   })
     .index("by_session_id", ["sessionId"])
     .index("by_status", ["status"]),

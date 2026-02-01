@@ -5,6 +5,15 @@ export const create = mutation({
   args: {
     sessionId: v.string(),
     initialQuery: v.string(),
+    parameters: v.optional(
+      v.object({
+        profile: v.optional(v.string()),
+        max_iterations: v.optional(v.number()),
+        start_date: v.optional(v.string()),
+        end_date: v.optional(v.string()),
+        use_managing_agent: v.optional(v.boolean()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("sessions", {
@@ -13,6 +22,7 @@ export const create = mutation({
       status: "running",
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      parameters: args.parameters,
     });
   },
 });

@@ -735,6 +735,7 @@ class ResearchSession:
         convex_client: ConvexClient | None = None,
         use_managing_agent: bool = False,
         filters: SearchFilters | None = None,
+        parameters: dict[str, Any] | None = None,
     ):
         """
         Initialize a research session.
@@ -745,6 +746,7 @@ class ResearchSession:
             convex_client: Optional Convex client for realtime streaming
             use_managing_agent: Whether to use the managing agent for intelligent splitting
             filters: Optional search filters for paper retrieval
+            parameters: Optional research parameters to store in Convex
         """
         self.config = config
         self.initial_query = initial_query
@@ -755,6 +757,7 @@ class ResearchSession:
         self._use_managing_agent = use_managing_agent
         self._managing_agent_adapter = None
         self._filters = filters
+        self._parameters = parameters
 
     async def __aenter__(self) -> ResearchSession:
         from ..semantic_scholar import SemanticScholarAdapter
@@ -807,6 +810,7 @@ class ResearchSession:
             await self._convex_client.create_session(
                 self._master_agent.current_state.loop_id,
                 self.initial_query,
+                parameters=self._parameters,
             )
             await self._master_agent.emit_initial_branch_event()
 

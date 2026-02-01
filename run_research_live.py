@@ -61,6 +61,20 @@ async def main(
         )
         logger.info("Continuing without realtime streaming...")
 
+    # Build parameters dict to store in Convex
+    parameters = {
+        "profile": profile,
+        "max_iterations": max_iterations,
+        "use_managing_agent": use_managing_agent,
+    }
+
+    # Add date filters if present
+    if filters:
+        if filters.start_date:
+            parameters["start_date"] = filters.start_date
+        if filters.end_date:
+            parameters["end_date"] = filters.end_date
+
     try:
         # Load configuration
         config = load_config(profile)
@@ -75,6 +89,7 @@ async def main(
             convex_client=convex,
             use_managing_agent=use_managing_agent,
             filters=filters,
+            parameters=parameters,
         ) as session:
             logger.info(f"Started research session: {session.loop_id}")
             logger.info(f"Query: {query}")
