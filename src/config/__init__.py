@@ -1,4 +1,4 @@
-"""Configuration system for model backends."""
+"""Configuration system for model backends and research loop."""
 
 from .loader import (
     load_config,
@@ -7,12 +7,24 @@ from .loader import (
     SummarizerConfig,
     HaluGateConfig,
     OverseerConfig,
+    InnerLoopConfig,
+    IterationLoopConfig,
+    BranchConfig,
+    MasterAgentConfig,
+    ResearchLoopConfig,
 )
 from .factory import (
     create_summarizer,
     create_halugate,
     create_overseer,
     create_from_profile,
+    create_inner_loop,
+    create_iteration_loop,
+    create_master_agent,
+    create_hypothesis_generator,
+    create_hypothesis_validator,
+    create_context_estimator,
+    create_branch_splitter,
 )
 
 __all__ = [
@@ -23,9 +35,23 @@ __all__ = [
     "SummarizerConfig",
     "HaluGateConfig",
     "OverseerConfig",
-    # Factory
+    # Research Loop Config
+    "InnerLoopConfig",
+    "IterationLoopConfig",
+    "BranchConfig",
+    "MasterAgentConfig",
+    "ResearchLoopConfig",
+    # Factory - Core
     "create_summarizer",
     "create_halugate",
     "create_overseer",
     "create_from_profile",
+    # Factory - Research Loop
+    "create_inner_loop",
+    "create_iteration_loop",
+    "create_master_agent",
+    "create_hypothesis_generator",
+    "create_hypothesis_validator",
+    "create_context_estimator",
+    "create_branch_splitter",
 ]

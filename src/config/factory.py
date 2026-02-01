@@ -181,3 +181,169 @@ def create_from_profile(
     overseer = create_overseer(halugate, summarizer, profile.overseer)
 
     return summarizer, halugate, overseer
+
+
+def create_inner_loop(
+    search_provider,
+    summarizer,
+    halugate,
+    config,
+    hypothesis_generator=None,
+):
+    """Create an InnerLoop from configuration.
+
+    Args:
+        search_provider: Semantic Scholar adapter
+        summarizer: LLM provider for summarization
+        halugate: HaluGate instance for validation
+        config: InnerLoopConfig
+        hypothesis_generator: Optional hypothesis generator
+
+    Returns:
+        InnerLoop instance
+    """
+    from ..orchestration.inner_loop import InnerLoop
+
+    return InnerLoop(
+        search_provider=search_provider,
+        summarizer=summarizer,
+        halugate=halugate,
+        config=config,
+        hypothesis_generator=hypothesis_generator,
+    )
+
+
+def create_iteration_loop(
+    inner_loop,
+    search_provider,
+    context_estimator,
+    config,
+):
+    """Create an IterationLoop from configuration.
+
+    Args:
+        inner_loop: InnerLoop instance
+        search_provider: Semantic Scholar adapter
+        context_estimator: Context estimator
+        config: IterationLoopConfig
+
+    Returns:
+        IterationLoop instance
+    """
+    from ..orchestration.iteration_loop import IterationLoop
+
+    return IterationLoop(
+        inner_loop=inner_loop,
+        search_provider=search_provider,
+        context_estimator=context_estimator,
+        config=config,
+    )
+
+
+def create_master_agent(
+    search_provider,
+    summarizer,
+    halugate,
+    config,
+):
+    """Create a MasterAgent from configuration.
+
+    Args:
+        search_provider: Semantic Scholar adapter
+        summarizer: LLM provider for summarization
+        halugate: HaluGate instance for validation
+        config: ResearchLoopConfig
+
+    Returns:
+        MasterAgent instance
+    """
+    from ..orchestration.master_agent import MasterAgent
+
+    return MasterAgent(
+        search_provider=search_provider,
+        summarizer=summarizer,
+        halugate=halugate,
+        config=config,
+    )
+
+
+def create_hypothesis_generator(
+    llm_provider,
+    hypotheses_per_batch: int = 3,
+    temperature: float = 0.7,
+):
+    """Create a HypothesisGenerator.
+
+    Args:
+        llm_provider: LLM provider for generation
+        hypotheses_per_batch: Number of hypotheses per batch
+        temperature: LLM temperature
+
+    Returns:
+        HypothesisGenerator instance
+    """
+    from ..hypothesis.generator import HypothesisGenerator
+
+    return HypothesisGenerator(
+        llm_provider=llm_provider,
+        hypotheses_per_batch=hypotheses_per_batch,
+        temperature=temperature,
+    )
+
+
+def create_hypothesis_validator(
+    halugate,
+    groundedness_threshold: float = 0.8,
+):
+    """Create a HypothesisValidator.
+
+    Args:
+        halugate: HaluGate instance for validation
+        groundedness_threshold: Minimum groundedness
+
+    Returns:
+        HypothesisValidator instance
+    """
+    from ..hypothesis.validator import HypothesisValidator
+
+    return HypothesisValidator(
+        halugate=halugate,
+        groundedness_threshold=groundedness_threshold,
+    )
+
+
+def create_context_estimator(
+    use_tiktoken: bool = False,
+    chars_per_token: float = 4.0,
+):
+    """Create a ContextEstimator.
+
+    Args:
+        use_tiktoken: Whether to use tiktoken for accurate counting
+        chars_per_token: Average characters per token
+
+    Returns:
+        ContextEstimator instance
+    """
+    from ..context.estimator import ContextEstimator
+
+    return ContextEstimator(
+        use_tiktoken=use_tiktoken,
+        chars_per_token=chars_per_token,
+    )
+
+
+def create_branch_splitter(
+    default_num_splits: int = 2,
+):
+    """Create a BranchSplitter.
+
+    Args:
+        default_num_splits: Default number of splits
+
+    Returns:
+        BranchSplitter instance
+    """
+    from ..context.splitter import BranchSplitter
+
+    return BranchSplitter(default_num_splits=default_num_splits)

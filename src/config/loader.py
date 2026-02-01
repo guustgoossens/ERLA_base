@@ -34,12 +34,60 @@ class OverseerConfig(BaseModel):
     groundedness_threshold: float = 0.8
 
 
+class InnerLoopConfig(BaseModel):
+    """Configuration for the Inner Loop (Layer 1)."""
+
+    groundedness_threshold: float = 0.95  # Higher threshold for research loop
+    max_papers_per_iteration: int = 20
+    parallel_summarization: bool = True
+    max_summarization_concurrency: int = 5
+    fetch_full_text: bool = True  # Whether to fetch full PDF text (slower but more detailed)
+
+
+class IterationLoopConfig(BaseModel):
+    """Configuration for the Iteration Loop (Layer 2)."""
+
+    max_iterations_per_branch: int = 10
+    citation_depth: int = 2  # How many levels of citations to follow
+    max_citations_per_paper: int = 5  # Reduced from 20 to limit explosion
+    max_references_per_paper: int = 5  # Reduced from 20 to limit explosion
+    include_references: bool = True  # Also follow references, not just citations
+
+
+class BranchConfig(BaseModel):
+    """Configuration for branch management."""
+
+    max_context_window: int = 128000
+    context_split_threshold: float = 0.8  # Split when context is 80% full
+    min_papers_for_hypothesis_mode: int = 10
+    max_branches: int = 10
+
+
+class MasterAgentConfig(BaseModel):
+    """Configuration for the Master Agent (Layer 3)."""
+
+    max_parallel_branches: int = 5
+    auto_prune_enabled: bool = True
+    auto_split_enabled: bool = True
+    auto_hypothesis_mode: bool = True  # Auto-switch to hypothesis mode when enough papers
+
+
+class ResearchLoopConfig(BaseModel):
+    """Configuration for the entire research loop system."""
+
+    inner_loop: InnerLoopConfig = InnerLoopConfig()
+    iteration_loop: IterationLoopConfig = IterationLoopConfig()
+    branch: BranchConfig = BranchConfig()
+    master_agent: MasterAgentConfig = MasterAgentConfig()
+
+
 class ProfileConfig(BaseModel):
     """Configuration profile containing all backend configs."""
 
     summarizer: SummarizerConfig
     halugate: HaluGateConfig
     overseer: OverseerConfig = OverseerConfig()
+    research_loop: ResearchLoopConfig = ResearchLoopConfig()
 
 
 class ConfigFile(BaseModel):
@@ -152,10 +200,14 @@ def load_config_from_env() -> ProfileConfig:
     # Overseer config - use defaults
     overseer = OverseerConfig()
 
+    # Research loop config - use defaults
+    research_loop = ResearchLoopConfig()
+
     return ProfileConfig(
         summarizer=summarizer,
         halugate=halugate,
         overseer=overseer,
+        research_loop=research_loop,
     )
 
 

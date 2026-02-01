@@ -77,3 +77,112 @@ profiles:
     overseer:
       max_retries: 2
       groundedness_threshold: 0.8
+
+  # Research Loop profile - for running the recursive research agent
+  # Uses mock HaluGate for fast iteration during development
+  research-fast:
+    summarizer:
+      backend: openrouter
+      model: upstage/solar-pro-3:free
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 10
+        parallel_summarization: true
+        max_summarization_concurrency: 3
+      iteration_loop:
+        max_iterations_per_branch: 5
+        citation_depth: 2
+        max_citations_per_paper: 3
+        max_references_per_paper: 3
+        include_references: false  # Skip references to speed up
+      branch:
+        max_context_window: 128000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 5
+        max_branches: 5
+      master_agent:
+        max_parallel_branches: 3
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+
+  # Research Loop profile - accurate mode with real HaluGate
+  research-accurate:
+    summarizer:
+      backend: openrouter
+      model: upstage/solar-pro-3:free
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: local
+      use_sentinel: true
+      device: cpu
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.8
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 20
+        parallel_summarization: true
+        max_summarization_concurrency: 5
+      iteration_loop:
+        max_iterations_per_branch: 10
+        citation_depth: 2
+        max_citations_per_paper: 20
+        max_references_per_paper: 20
+        include_references: true
+      branch:
+        max_context_window: 128000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 10
+        max_branches: 10
+      master_agent:
+        max_parallel_branches: 5
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+
+  # Research Loop production profile - high quality with Claude
+  research-prod:
+    summarizer:
+      backend: openrouter
+      model: anthropic/claude-3-5-sonnet
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: https://openrouter.ai/api/v1
+    halugate:
+      backend: local
+      use_sentinel: true
+      device: cpu
+    overseer:
+      max_retries: 2
+      groundedness_threshold: 0.85
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 20
+        parallel_summarization: true
+        max_summarization_concurrency: 5
+      iteration_loop:
+        max_iterations_per_branch: 15
+        citation_depth: 3
+        max_citations_per_paper: 30
+        max_references_per_paper: 30
+        include_references: true
+      branch:
+        max_context_window: 200000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 10
+        max_branches: 15
+      master_agent:
+        max_parallel_branches: 5
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
