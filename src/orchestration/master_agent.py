@@ -29,7 +29,7 @@ if TYPE_CHECKING:
         LoopStatus,
         ResearchHypothesis,
     )
-    from .managing_agent import ManagingAgent, SplitRecommendation
+    from .managing_agent import ManagingAgent, SplitRecommendation, BranchAction
 
 logger = logging.getLogger(__name__)
 
@@ -292,19 +292,20 @@ class MasterAgent:
             )
 
         # Auto-management checks
-        # Use managing agent for intelligent splitting if available
+        # Use managing agent for autonomous decisions if available
         if self._managing_agent:
             recommendation = await self._consult_managing_agent(branch)
-            if recommendation and recommendation.should_split:
-                logger.info(
-                    f"Managing agent recommends split for branch {branch_id}: "
-                    f"{recommendation.reasoning[:100]}..."
-                )
-                await self._execute_managed_split(branch_id, recommendation)
-        elif self.auto_split and self.branch_manager.should_split(branch):
-            # Fall back to context-threshold splitting
-            logger.info(f"Auto-splitting branch {branch_id} (context threshold reached)")
-            await self.split_branch(branch_id, "by_field")
+            if recommendation:
+                await self._execute_agent_decision(branch_id, recommendation)
+        elif self.auto_split:
+            # Fall back to context-threshold splitting (soft warning first)
+            context_warning = self.branch_manager.get_context_warning(branch)
+            if context_warning:
+                logger.info(f"Branch {branch_id}: {context_warning}")
+
+            if self.branch_manager.should_split(branch):
+                logger.info(f"Auto-splitting branch {branch_id} (context threshold reached)")
+                await self.split_branch(branch_id, "by_field")
 
         if self.auto_hypothesis and self.branch_manager.should_enable_hypothesis_mode(branch):
             logger.info(f"Auto-enabling hypothesis mode for branch {branch_id}")
@@ -612,6 +613,76 @@ class MasterAgent:
 
         return sorted_hypotheses[:n]
 
+    async def _execute_agent_decision(
+        self,
+        branch_id: str,
+        recommendation: SplitRecommendation,
+    ) -> None:
+        """
+        Execute the managing agent's decision.
+
+        Handles all action types: CONTINUE, SPLIT, WRAP_UP.
+
+        Args:
+            branch_id: ID of the branch
+            recommendation: The agent's recommendation
+        """
+        from .managing_agent import BranchAction
+        from .models import BranchStatus
+
+        if not self._current_state:
+            return
+
+        branch = self._current_state.get_branch(branch_id)
+        if not branch:
+            return
+
+        action = recommendation.action
+
+        # Log any context warnings
+        if recommendation.context_warning:
+            logger.info(f"Branch {branch_id} context: {recommendation.context_warning}")
+
+        if action == BranchAction.CONTINUE:
+            logger.info(
+                f"Managing agent: CONTINUE branch {branch_id} - "
+                f"{recommendation.reasoning[:100]}..."
+            )
+            # Nothing to do - branch continues normally
+
+        elif action == BranchAction.SPLIT:
+            logger.info(
+                f"Managing agent: SPLIT branch {branch_id} into "
+                f"{recommendation.num_branches} branches - "
+                f"{recommendation.reasoning[:100]}..."
+            )
+            await self._execute_managed_split(branch_id, recommendation)
+
+        elif action == BranchAction.WRAP_UP:
+            logger.info(
+                f"Managing agent: WRAP_UP branch {branch_id} - "
+                f"{recommendation.reasoning[:100]}..."
+            )
+            # Mark branch as completed
+            branch.status = BranchStatus.COMPLETED
+            branch.updated_at = datetime.now()
+            self.state_store.save_state(self._current_state)
+
+            # Emit status change event
+            if self._convex_client:
+                await self._convex_client.emit_branch_status_changed(
+                    branch_id=branch_id,
+                    status=branch.status.value,
+                    context_used=branch.context_window_used,
+                    paper_count=branch.total_papers,
+                    summary_count=branch.total_summaries,
+                )
+
+            logger.info(
+                f"Branch {branch_id} wrapped up with {branch.total_papers} papers, "
+                f"{branch.total_summaries} summaries"
+            )
+
     async def _consult_managing_agent(self, branch: Branch) -> SplitRecommendation | None:
         """
         Consult the managing agent about whether to split a branch.
@@ -791,9 +862,20 @@ class ResearchSession:
         if self._use_managing_agent:
             from .managing_agent import ManagingAgent
             from ..llm.adapters import AnthropicAdapter
+            from ..settings import ANTHROPIC_API_KEY
+
+            # Validate API key before creating adapter
+            if not ANTHROPIC_API_KEY:
+                raise ValueError(
+                    "ANTHROPIC_API_KEY environment variable is required when using the managing agent. "
+                    "Please set it in your environment or .env file, or set use_managing_agent=False."
+                )
 
             managing_config = self.config.research_loop.master_agent.managing_agent
-            self._managing_agent_adapter = AnthropicAdapter(model=managing_config.model)
+            self._managing_agent_adapter = AnthropicAdapter(
+                api_key=ANTHROPIC_API_KEY,
+                model=managing_config.model,
+            )
             await self._managing_agent_adapter.__aenter__()
 
             managing_agent = ManagingAgent(

@@ -5,6 +5,7 @@ This module provides the 4-layer recursive research agent:
 - Layer 2: IterationLoop - Depth expansion via citation traversal
 - Layer 3: MasterAgent - Orchestrator with tool-based control
 - Layer 4: Big Loop 2 - Hypothesis-seeded recursive exploration
+- Phase 5: ReflectionAgent - Post-summarization evaluation and gap identification
 """
 
 from .overseer import Overseer
@@ -22,9 +23,16 @@ from .models import (
 from .inner_loop import InnerLoop
 from .iteration_loop import IterationLoop
 from .master_agent import MasterAgent, ResearchSession
-from .managing_agent import ManagingAgent, SplitRecommendation, create_managing_agent
+from .managing_agent import (
+    ManagingAgent,
+    SplitRecommendation,
+    create_managing_agent,
+    BranchAction,
+    SplitCriteria,
+)
 from .branch_manager import BranchManager
 from .state_store import StateStore
+from .reflection import ReflectionAgent, ReflectionResult, create_reflection_agent
 from .tools import (
     ToolType,
     ToolDefinition,
@@ -34,6 +42,13 @@ from .tools import (
     get_tool_schema,
     get_tool_descriptions,
     TOOL_DEFINITIONS,
+)
+from .query_planner import (
+    QueryPlanner,
+    SearchPlan,
+    DiversityDimension,
+    SaturationCriterion,
+    create_search_plan,
 )
 
 __all__ = [
@@ -60,6 +75,12 @@ __all__ = [
     "ManagingAgent",
     "SplitRecommendation",
     "create_managing_agent",
+    "BranchAction",
+    "SplitCriteria",
+    # Phase 5: Reflection
+    "ReflectionAgent",
+    "ReflectionResult",
+    "create_reflection_agent",
     # Branch Management
     "BranchManager",
     "StateStore",
@@ -72,4 +93,10 @@ __all__ = [
     "get_tool_schema",
     "get_tool_descriptions",
     "TOOL_DEFINITIONS",
+    # Query Planning
+    "QueryPlanner",
+    "SearchPlan",
+    "DiversityDimension",
+    "SaturationCriterion",
+    "create_search_plan",
 ]
