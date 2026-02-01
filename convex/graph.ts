@@ -23,10 +23,12 @@ export const getFullGraph = query({
         .collect(),
     ]);
 
-    // Build groundedness map for papers
+    // Build groundedness map and summary text map for papers
     const groundednessMap = new Map<string, number>();
+    const summaryTextMap = new Map<string, string>();
     for (const summary of summaries) {
       groundednessMap.set(summary.paperId, summary.groundedness);
+      summaryTextMap.set(summary.paperId, summary.summary);
     }
 
     // Color helpers
@@ -92,6 +94,7 @@ export const getFullGraph = query({
     // Paper nodes
     for (const paper of papers) {
       const groundedness = groundednessMap.get(paper.paperId) ?? 0.5;
+      const summaryText = summaryTextMap.get(paper.paperId);
       nodes.push({
         id: `paper:${paper.paperId}`,
         type: "paper",
@@ -101,11 +104,14 @@ export const getFullGraph = query({
         data: {
           paperId: paper.paperId,
           title: paper.title,
+          abstract: paper.abstract,
           year: paper.year,
           citationCount: paper.citationCount,
           venue: paper.venue,
           authors: paper.authors,
           groundedness,
+          summaryText,
+          iterationNumber: paper.iterationNumber,
           branchId: paper.branchId,
         },
       });
@@ -124,6 +130,7 @@ export const getFullGraph = query({
           text: hyp.text,
           confidence: hyp.confidence,
           supportingPaperIds: hyp.supportingPaperIds,
+          iterationNumber: hyp.iterationNumber,
           branchId: hyp.branchId,
         },
       });

@@ -37,7 +37,6 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
-  const [hoverNode, setHoverNode] = useState<NodeData | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
@@ -158,9 +157,22 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
       paper: "Paper",
       hypothesis: "Hypothesis",
     };
-    return `<div style="background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 6px; max-width: 300px;">
-      <div style="color: ${node.color}; font-weight: bold; margin-bottom: 4px;">${typeLabels[node.type]}</div>
-      <div style="color: white; font-size: 12px;">${node.label}</div>
+    const iterationNumber = node.data.iterationNumber as number | undefined;
+    const iterationBadge = iterationNumber !== undefined
+      ? `<span style="background: #1e3a5f; color: #60a5fa; padding: 2px 6px; border-radius: 10px; font-size: 10px; margin-left: 8px;">Iter ${iterationNumber}</span>`
+      : "";
+    const groundedness = node.type === "paper" ? node.data.groundedness as number | undefined : undefined;
+    const groundednessBadge = groundedness !== undefined
+      ? `<div style="color: #9ca3af; font-size: 10px; margin-top: 4px;">Groundedness: ${(groundedness * 100).toFixed(0)}%</div>`
+      : "";
+    const confidence = node.type === "hypothesis" ? node.data.confidence as number | undefined : undefined;
+    const confidenceBadge = confidence !== undefined
+      ? `<div style="color: #9ca3af; font-size: 10px; margin-top: 4px;">Confidence: ${(confidence * 100).toFixed(0)}%</div>`
+      : "";
+    return `<div style="background: rgba(0,0,0,0.9); padding: 10px 14px; border-radius: 8px; max-width: 320px; border: 1px solid #374151;">
+      <div style="color: ${node.color}; font-weight: bold; margin-bottom: 4px; display: flex; align-items: center;">${typeLabels[node.type]}${iterationBadge}</div>
+      <div style="color: white; font-size: 12px; line-height: 1.4;">${node.label}</div>
+      ${groundednessBadge}${confidenceBadge}
     </div>`;
   }, []);
 
@@ -236,18 +248,14 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
             linkDirectionalParticleSpeed={0.005}
             linkDirectionalParticleWidth={2}
             onNodeClick={handleNodeClick}
-            onNodeHover={(node) => setHoverNode(node as NodeData | null)}
             backgroundColor="#111827"
             d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
+            d3VelocityDecay={0.4}
             warmupTicks={100}
             cooldownTicks={200}
+            cooldownTime={3000}
+            enablePointerInteraction={true}
           />
-          {hoverNode && (
-            <div className="absolute top-4 left-4 bg-gray-800 px-3 py-2 rounded-lg text-sm text-gray-300">
-              {hoverNode.label}
-            </div>
-          )}
         </div>
       </div>
 
