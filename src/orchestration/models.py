@@ -106,8 +106,28 @@ class Branch:
 
     @property
     def is_context_nearly_full(self) -> bool:
-        """Check if context window is ≥80% full (split threshold)."""
+        """Check if context window is ≥80% full (soft warning threshold).
+
+        Note: This is now a soft warning, not a forced split trigger.
+        The managing agent makes autonomous decisions about when to split.
+        """
         return self.context_utilization >= 0.8
+
+    @property
+    def context_status(self) -> str:
+        """Get human-readable context status.
+
+        Returns status string indicating context utilization level.
+        """
+        utilization = self.context_utilization
+        if utilization >= 0.90:
+            return f"critical ({utilization:.0%})"
+        elif utilization >= 0.80:
+            return f"high ({utilization:.0%})"
+        elif utilization >= 0.70:
+            return f"moderate ({utilization:.0%})"
+        else:
+            return f"low ({utilization:.0%})"
 
     @property
     def total_papers(self) -> int:

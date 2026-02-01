@@ -195,15 +195,44 @@ class BranchManager:
 
     def should_split(self, branch: Branch) -> bool:
         """
-        Check if a branch should be split.
+        Check if a branch should be split based on context threshold.
+
+        NOTE: This is the fallback check used when the managing agent is not enabled.
+        When the managing agent is enabled, it makes autonomous decisions about splitting
+        and this method is not used.
+
+        The threshold is a soft recommendation at 80%, not a hard requirement.
 
         Args:
             branch: Branch to check
 
         Returns:
-            True if branch should be split
+            True if branch should be split (context >= threshold)
         """
         return branch.context_utilization >= self.split_threshold
+
+    def get_context_warning(self, branch: Branch) -> str | None:
+        """
+        Get a warning message if context usage is getting high.
+
+        This provides soft guardrails rather than hard thresholds.
+
+        Args:
+            branch: Branch to check
+
+        Returns:
+            Warning message if context is above 70%, None otherwise
+        """
+        utilization = branch.context_utilization
+
+        if utilization >= 0.90:
+            return f"CRITICAL: Context at {utilization:.0%} - action needed soon"
+        elif utilization >= 0.80:
+            return f"HIGH: Context at {utilization:.0%} - consider splitting or wrapping up"
+        elif utilization >= 0.70:
+            return f"MODERATE: Context at {utilization:.0%} - be mindful of remaining capacity"
+
+        return None
 
     def should_enable_hypothesis_mode(self, branch: Branch) -> bool:
         """
