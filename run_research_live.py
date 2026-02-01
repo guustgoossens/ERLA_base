@@ -24,6 +24,7 @@ load_dotenv(project_root / ".env.local", override=True)
 
 from src.config import load_config
 from src.orchestration import ResearchSession
+from src.semantic_scholar import SearchFilters
 from src.storage import ConvexClient
 
 
@@ -39,6 +40,7 @@ async def main(
     profile: str = "research-fast",
     max_iterations: int = 5,
     use_managing_agent: bool = False,
+    filters: SearchFilters | None = None,
 ) -> None:
     """Run a research session with Convex streaming.
 
@@ -47,6 +49,7 @@ async def main(
         profile: Configuration profile name
         max_iterations: Maximum iterations to run
         use_managing_agent: Whether to use Claude Opus for intelligent branch splitting
+        filters: Optional search filters for paper retrieval
     """
     # Initialize Convex client
     convex = ConvexClient()
@@ -71,6 +74,7 @@ async def main(
             query,
             convex_client=convex,
             use_managing_agent=use_managing_agent,
+            filters=filters,
         ) as session:
             logger.info(f"Started research session: {session.loop_id}")
             logger.info(f"Query: {query}")
@@ -133,11 +137,34 @@ if __name__ == "__main__":
         action="store_true",
         help="Use Claude Opus for intelligent branch splitting decisions",
     )
+    parser.add_argument(
+        "--start-date",
+        type=str,
+        help="Filter papers published on or after this date (YYYY-MM-DD, YYYY-MM, or YYYY)",
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        help="Filter papers published on or before this date (YYYY-MM-DD, YYYY-MM, or YYYY)",
+    )
+    parser.add_argument(
+        "--year",
+        "-y",
+        type=str,
+        help="[Deprecated] Year filter (e.g., '2023-2024'). Use --start-date/--end-date instead.",
+    )
 
     args = parser.parse_args()
 
+    # Build filters from CLI args
+    filters = None
+    if args.start_date or args.end_date:
+        filters = SearchFilters(start_date=args.start_date, end_date=args.end_date)
+    elif args.year:
+        filters = SearchFilters(year=args.year)
+
     try:
-        asyncio.run(main(args.query, args.profile, args.iterations, args.use_managing_agent))
+        asyncio.run(main(args.query, args.profile, args.iterations, args.use_managing_agent, filters))
     except KeyboardInterrupt:
         logger.info("\nResearch interrupted by user")
         sys.exit(0)

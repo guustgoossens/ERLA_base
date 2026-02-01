@@ -17,7 +17,7 @@ if TYPE_CHECKING:
         ResearchLoopConfig,
         ProfileConfig,
     )
-    from ..semantic_scholar import SemanticScholarAdapter
+    from ..semantic_scholar import SemanticScholarAdapter, SearchFilters
     from ..llm.protocols import LLMProvider
     from ..halugate import LocalHaluGate
     from ..storage import ConvexClient
@@ -172,6 +172,7 @@ class MasterAgent:
         initial_query: str,
         loop_number: int = 1,
         seeding_hypotheses: list[ResearchHypothesis] | None = None,
+        filters: SearchFilters | None = None,
     ) -> LoopState:
         """
         Start a new research loop.
@@ -180,6 +181,7 @@ class MasterAgent:
             initial_query: Initial search query
             loop_number: Loop number (1 for initial, 2+ for hypothesis-seeded)
             seeding_hypotheses: Hypotheses that seeded this loop (for Big Loop 2+)
+            filters: Optional search filters for paper retrieval
 
         Returns:
             New loop state
@@ -192,6 +194,7 @@ class MasterAgent:
         state = LoopState(
             loop_id=loop_id,
             loop_number=loop_number,
+            session_filters=filters,
             seeding_hypotheses=seeding_hypotheses,
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -201,6 +204,7 @@ class MasterAgent:
         initial_branch = self.branch_manager.create_branch(
             query=initial_query,
             mode=InnerLoopMode.SEARCH_SUMMARIZE,
+            filters=filters,
         )
         initial_branch.status = BranchStatus.PENDING
         state.add_branch(initial_branch)
@@ -663,11 +667,12 @@ class MasterAgent:
             recommendation.group_queries,
             recommendation.group_labels,
         )):
-            # Create child branch
+            # Create child branch (inherits filters from parent)
             child = self.branch_manager.create_branch(
                 query=query,
                 mode=branch.mode,
                 parent_branch_id=branch.id,
+                filters=branch.filters,
             )
 
             # Copy relevant papers from parent
@@ -729,6 +734,7 @@ class ResearchSession:
         initial_query: str,
         convex_client: ConvexClient | None = None,
         use_managing_agent: bool = False,
+        filters: SearchFilters | None = None,
     ):
         """
         Initialize a research session.
@@ -738,6 +744,7 @@ class ResearchSession:
             initial_query: Initial research query
             convex_client: Optional Convex client for realtime streaming
             use_managing_agent: Whether to use the managing agent for intelligent splitting
+            filters: Optional search filters for paper retrieval
         """
         self.config = config
         self.initial_query = initial_query
@@ -747,6 +754,7 @@ class ResearchSession:
         self._convex_client = convex_client
         self._use_managing_agent = use_managing_agent
         self._managing_agent_adapter = None
+        self._filters = filters
 
     async def __aenter__(self) -> ResearchSession:
         from ..semantic_scholar import SemanticScholarAdapter
@@ -792,7 +800,7 @@ class ResearchSession:
             self._master_agent.set_managing_agent(managing_agent)
 
         # Start the loop
-        self._master_agent.start_loop(self.initial_query)
+        self._master_agent.start_loop(self.initial_query, filters=self._filters)
 
         # Create Convex session and emit initial events
         if self._convex_client and self._convex_client.enabled:

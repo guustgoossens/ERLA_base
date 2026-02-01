@@ -45,7 +45,9 @@ class PaperDetails(PaperSearchResult):
 class SearchFilters(BaseModel):
     """Filters for paper search."""
 
-    year: str | None = None  # e.g., "2020-2024" or "2020-" or "-2024"
+    year: str | None = None  # DEPRECATED: use start_date/end_date instead
+    start_date: str | None = None  # e.g., "2023-06-01" or "2023-06" or "2023"
+    end_date: str | None = None  # e.g., "2024-01-31" or "2024-01" or "2024"
     fields_of_study: list[str] | None = None
     min_citation_count: int | None = None
     publication_types: list[str] | None = None
@@ -55,7 +57,13 @@ class SearchFilters(BaseModel):
         """Convert filters to API query parameters."""
         params: dict[str, str] = {}
 
-        if self.year:
+        # Build publicationDateOrYear from start/end dates
+        if self.start_date or self.end_date:
+            start = self.start_date or ""
+            end = self.end_date or ""
+            params["publicationDateOrYear"] = f"{start}:{end}"
+        elif self.year:
+            # Backward compatibility with year-only filter
             params["year"] = self.year
 
         if self.fields_of_study:

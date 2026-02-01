@@ -98,6 +98,7 @@ class IterationLoop:
                 query=branch.query,
                 branch_id=branch.id,
                 generate_hypotheses=generate_hypotheses,
+                filters=branch.filters,
             )
         else:
             # Subsequent iterations: follow citation graph

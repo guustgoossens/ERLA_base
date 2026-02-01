@@ -8,7 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..semantic_scholar import PaperDetails
+    from ..semantic_scholar import PaperDetails, SearchFilters
 
 
 class BranchStatus(Enum):
@@ -90,6 +90,7 @@ class Branch:
     mode: InnerLoopMode
     status: BranchStatus
     parent_branch_id: str | None = None
+    filters: SearchFilters | None = None
     iterations: list[IterationResult] = field(default_factory=list)
     accumulated_papers: dict[str, PaperDetails] = field(default_factory=dict)
     accumulated_summaries: dict[str, ValidatedSummary] = field(default_factory=dict)
@@ -152,6 +153,7 @@ class LoopState:
 
     loop_id: str
     loop_number: int  # 1 = initial loop, 2+ = hypothesis-seeded loops
+    session_filters: SearchFilters | None = None
     branches: dict[str, Branch] = field(default_factory=dict)
     hypotheses: list[ResearchHypothesis] = field(default_factory=list)
     seeding_hypotheses: list[ResearchHypothesis] | None = None  # For Big Loop 2+

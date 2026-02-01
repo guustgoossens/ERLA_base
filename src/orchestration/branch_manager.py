@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .models import Branch, BranchStatus, InnerLoopMode, LoopState
     from ..context.splitter import BranchSplitter, SplitStrategy
     from ..config.loader import BranchConfig
+    from ..semantic_scholar import SearchFilters
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class BranchManager:
         mode: InnerLoopMode,
         parent_branch_id: str | None = None,
         max_context: int | None = None,
+        filters: SearchFilters | None = None,
     ) -> Branch:
         """
         Create a new research branch.
@@ -65,6 +67,7 @@ class BranchManager:
             mode: Inner loop mode (search_summarize or hypothesis)
             parent_branch_id: ID of parent branch if this is a split
             max_context: Override max context window
+            filters: Optional search filters for paper retrieval
 
         Returns:
             Newly created branch
@@ -79,6 +82,7 @@ class BranchManager:
             mode=mode,
             status=BranchStatus.PENDING,
             parent_branch_id=parent_branch_id,
+            filters=filters,
             max_context_window=max_context or self.max_context_window,
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -129,11 +133,12 @@ class BranchManager:
         for i, (group, query, label) in enumerate(
             zip(result.groups, result.group_queries, result.group_labels)
         ):
-            # Create child branch
+            # Create child branch (inherits filters from parent)
             child = self.create_branch(
                 query=query,
                 mode=branch.mode,
                 parent_branch_id=branch.id,
+                filters=branch.filters,
             )
 
             # Copy relevant papers from parent
