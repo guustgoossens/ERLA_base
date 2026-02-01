@@ -78,6 +78,50 @@ class ExecutionAgentConfig(BaseModel):
     model: str = "claude-haiku-4-5-20251001"
 
 
+class ReflectionConfig(BaseModel):
+    """Configuration for the Reflection Loop (Phase 5).
+
+    Soft guardrails - these are suggestions, the agent can override with justification.
+    """
+
+    enabled: bool = True
+    min_papers_for_reflection: int = 5  # Minimum papers before triggering reflection
+    auto_search_gaps: bool = True  # Automatically search for papers to fill gaps
+    max_gap_searches: int = 3  # Maximum gap-filling searches per reflection
+    coverage_threshold: float = 0.8  # Coverage score below which gaps are flagged
+    reflection_interval: int = 1  # Reflect after every N iterations (0=only at end)
+
+
+class PaperSelectionConfig(BaseModel):
+    """Soft guardrails for paper selection.
+
+    These are suggestions - the agent can go outside these ranges if justified.
+    """
+
+    suggested_range: tuple[int, int] = (5, 30)  # [min, max] papers suggested
+    diversity_reminder: bool = True  # Prompt includes diversity consideration
+
+
+class BranchSplittingConfig(BaseModel):
+    """Soft guardrails for branch splitting.
+
+    These are suggestions - the agent can override with justification.
+    """
+
+    context_warning: float = 0.7  # Agent gets notified at this threshold, not forced
+    max_branches_suggestion: int = 5  # Soft limit, agent can request more
+
+
+class SearchConfig(BaseModel):
+    """Soft guardrails for search behavior.
+
+    These are suggestions to help the agent make good decisions.
+    """
+
+    initial_pool_size: int = 50  # Fetch many papers, agent filters down
+    min_papers_before_split: int = 5  # Suggestion before considering split
+
+
 class MasterAgentConfig(BaseModel):
     """Configuration for the Master Agent (Layer 3)."""
 
@@ -96,6 +140,11 @@ class ResearchLoopConfig(BaseModel):
     iteration_loop: IterationLoopConfig = IterationLoopConfig()
     branch: BranchConfig = BranchConfig()
     master_agent: MasterAgentConfig = MasterAgentConfig()
+    reflection: ReflectionConfig = ReflectionConfig()
+    # Soft guardrails (suggestions, not hard limits)
+    paper_selection: PaperSelectionConfig = PaperSelectionConfig()
+    branch_splitting: BranchSplittingConfig = BranchSplittingConfig()
+    search: SearchConfig = SearchConfig()
 
 
 class ProfileConfig(BaseModel):

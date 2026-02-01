@@ -12,6 +12,12 @@ from .loader import (
     BranchConfig,
     MasterAgentConfig,
     ResearchLoopConfig,
+    # Phase 5: Reflection Loop config
+    ReflectionConfig,
+    # Soft guardrails configs
+    PaperSelectionConfig,
+    BranchSplittingConfig,
+    SearchConfig,
 )
 from .factory import (
     create_summarizer,
@@ -25,6 +31,7 @@ from .factory import (
     create_hypothesis_validator,
     create_context_estimator,
     create_branch_splitter,
+    create_reflection_agent,
 )
 
 __all__ = [
@@ -41,6 +48,12 @@ __all__ = [
     "BranchConfig",
     "MasterAgentConfig",
     "ResearchLoopConfig",
+    # Phase 5: Reflection Loop Config
+    "ReflectionConfig",
+    # Soft guardrails configs
+    "PaperSelectionConfig",
+    "BranchSplittingConfig",
+    "SearchConfig",
     # Factory - Core
     "create_summarizer",
     "create_halugate",
@@ -54,4 +67,5 @@ __all__ = [
     "create_hypothesis_validator",
     "create_context_estimator",
     "create_branch_splitter",
+    "create_reflection_agent",
 ]

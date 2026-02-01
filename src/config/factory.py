@@ -358,3 +358,27 @@ def create_branch_splitter(
     from ..context.splitter import BranchSplitter
 
     return BranchSplitter(default_num_splits=default_num_splits)
+
+
+def create_reflection_agent(
+    llm_provider,
+    search_provider=None,
+    config=None,
+):
+    """Create a ReflectionAgent for post-summarization evaluation.
+
+    Args:
+        llm_provider: LLM provider for reflection reasoning
+        search_provider: Optional Semantic Scholar adapter for gap filling
+        config: ReflectionConfig
+
+    Returns:
+        ReflectionAgent instance
+    """
+    from ..orchestration.reflection import ReflectionAgent
+
+    return ReflectionAgent(
+        llm_provider=llm_provider,
+        search_provider=search_provider,
+        config=config,
+    )
