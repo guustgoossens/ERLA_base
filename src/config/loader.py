@@ -63,6 +63,21 @@ class BranchConfig(BaseModel):
     max_branches: int = 10
 
 
+class ManagingAgentConfig(BaseModel):
+    """Configuration for the Managing Agent (intelligent splitting with Claude Opus)."""
+
+    enabled: bool = False
+    model: str = "claude-3-opus-20240229"
+    min_papers_before_evaluation: int = 5
+    evaluation_interval: int = 2  # Evaluate every N iterations
+
+
+class ExecutionAgentConfig(BaseModel):
+    """Configuration for Execution Agents (Claude Haiku for fast operations)."""
+
+    model: str = "claude-3-haiku-20240307"
+
+
 class MasterAgentConfig(BaseModel):
     """Configuration for the Master Agent (Layer 3)."""
 
@@ -70,6 +85,8 @@ class MasterAgentConfig(BaseModel):
     auto_prune_enabled: bool = True
     auto_split_enabled: bool = True
     auto_hypothesis_mode: bool = True  # Auto-switch to hypothesis mode when enough papers
+    managing_agent: ManagingAgentConfig = ManagingAgentConfig()
+    execution_agent: ExecutionAgentConfig = ExecutionAgentConfig()
 
 
 class ResearchLoopConfig(BaseModel):

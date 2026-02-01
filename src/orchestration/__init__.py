@@ -22,6 +22,7 @@ from .models import (
 from .inner_loop import InnerLoop
 from .iteration_loop import IterationLoop
 from .master_agent import MasterAgent, ResearchSession
+from .managing_agent import ManagingAgent, SplitRecommendation, create_managing_agent
 from .branch_manager import BranchManager
 from .state_store import StateStore
 from .tools import (
@@ -55,6 +56,10 @@ __all__ = [
     # Layer 3
     "MasterAgent",
     "ResearchSession",
+    # Managing Agent
+    "ManagingAgent",
+    "SplitRecommendation",
+    "create_managing_agent",
     # Branch Management
     "BranchManager",
     "StateStore",

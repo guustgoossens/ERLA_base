@@ -87,6 +87,7 @@ export const getFullGraph = query({
           paperCount: branch.paperCount,
           summaryCount: branch.summaryCount,
           parentBranchId: branch.parentBranchId,
+          createdAt: branch.createdAt,
         },
       });
     }
@@ -113,6 +114,7 @@ export const getFullGraph = query({
           summaryText,
           iterationNumber: paper.iterationNumber,
           branchId: paper.branchId,
+          createdAt: paper.createdAt,
         },
       });
     }
@@ -132,6 +134,7 @@ export const getFullGraph = query({
           supportingPaperIds: hyp.supportingPaperIds,
           iterationNumber: hyp.iterationNumber,
           branchId: hyp.branchId,
+          createdAt: hyp.createdAt,
         },
       });
     }

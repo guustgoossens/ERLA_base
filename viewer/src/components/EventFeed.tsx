@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
 interface EventFeedProps {
   sessionId: Id<"sessions">;
+  replayTime?: number;
 }
 
 const eventIcons: Record<string, string> = {
@@ -29,15 +30,29 @@ const eventColors: Record<string, string> = {
   error: "text-red-400",
 };
 
-export function EventFeed({ sessionId }: EventFeedProps) {
+export function EventFeed({ sessionId, replayTime }: EventFeedProps) {
   const events = useQuery(api.events.subscribe, { sessionId });
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Filter events based on replay time
+  const visibleEvents = useMemo(() => {
+    if (!events) return [];
+    if (replayTime === undefined) return events;
+
+    return events.filter((event) => event.createdAt <= replayTime);
+  }, [events, replayTime]);
+
+  // Find the most recent event for highlighting
+  const mostRecentEventId = useMemo(() => {
+    if (!visibleEvents || visibleEvents.length === 0) return null;
+    return visibleEvents[visibleEvents.length - 1]._id;
+  }, [visibleEvents]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [events]);
+  }, [visibleEvents]);
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -84,24 +99,35 @@ export function EventFeed({ sessionId }: EventFeedProps) {
     );
   }
 
+  const isReplayMode = replayTime !== undefined;
+
   return (
     <div className="h-64 flex flex-col">
-      <div className="px-4 py-2 border-b border-gray-700">
+      <div className="px-4 py-2 border-b border-gray-700 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-          Live Events ({events.length})
+          {isReplayMode ? "Events (Replay)" : "Live Events"} ({visibleEvents.length})
         </h3>
+        {isReplayMode && (
+          <span className="text-xs text-purple-400">
+            {formatTime(replayTime)}
+          </span>
+        )}
       </div>
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-2 space-y-1"
       >
-        {events.length === 0 ? (
+        {visibleEvents.length === 0 ? (
           <p className="text-gray-500 text-sm p-2">No events yet</p>
         ) : (
-          events.map((event) => (
+          visibleEvents.map((event) => (
             <div
               key={event._id}
-              className="flex items-start gap-2 p-2 rounded hover:bg-gray-800 transition-colors"
+              className={`flex items-start gap-2 p-2 rounded transition-colors ${
+                isReplayMode && event._id === mostRecentEventId
+                  ? "bg-purple-900/30 border border-purple-700"
+                  : "hover:bg-gray-800"
+              }`}
             >
               <span className="text-lg">
                 {eventIcons[event.eventType] || "📌"}

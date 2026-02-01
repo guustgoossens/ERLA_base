@@ -38,6 +38,7 @@ async def main(
     query: str,
     profile: str = "research-fast",
     max_iterations: int = 5,
+    use_managing_agent: bool = False,
 ) -> None:
     """Run a research session with Convex streaming.
 
@@ -45,6 +46,7 @@ async def main(
         query: Research query to explore
         profile: Configuration profile name
         max_iterations: Maximum iterations to run
+        use_managing_agent: Whether to use Claude Opus for intelligent branch splitting
     """
     # Initialize Convex client
     convex = ConvexClient()
@@ -60,9 +62,16 @@ async def main(
         # Load configuration
         config = load_config(profile)
         logger.info(f"Using profile: {profile}")
+        if use_managing_agent:
+            logger.info("Managing agent enabled (Claude Opus for intelligent splitting)")
 
         # Run research session
-        async with ResearchSession(config, query, convex_client=convex) as session:
+        async with ResearchSession(
+            config,
+            query,
+            convex_client=convex,
+            use_managing_agent=use_managing_agent,
+        ) as session:
             logger.info(f"Started research session: {session.loop_id}")
             logger.info(f"Query: {query}")
 
@@ -118,11 +127,17 @@ if __name__ == "__main__":
         default=5,
         help="Maximum iterations (default: 5)",
     )
+    parser.add_argument(
+        "--use-managing-agent",
+        "-m",
+        action="store_true",
+        help="Use Claude Opus for intelligent branch splitting decisions",
+    )
 
     args = parser.parse_args()
 
     try:
-        asyncio.run(main(args.query, args.profile, args.iterations))
+        asyncio.run(main(args.query, args.profile, args.iterations, args.use_managing_agent))
     except KeyboardInterrupt:
         logger.info("\nResearch interrupted by user")
         sys.exit(0)

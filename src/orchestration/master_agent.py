@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         LoopStatus,
         ResearchHypothesis,
     )
+    from .managing_agent import ManagingAgent, SplitRecommendation
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,10 @@ class MasterAgent:
         self.auto_hypothesis = config.master_agent.auto_hypothesis_mode
         self.max_parallel_branches = config.master_agent.max_parallel_branches
 
+        # Managing agent for intelligent splitting (optional)
+        self._managing_agent: ManagingAgent | None = None
+        self._managing_agent_config = config.master_agent.managing_agent
+
         # Convex client for realtime streaming (optional)
         self._convex_client: ConvexClient | None = None
 
@@ -137,6 +142,20 @@ class MasterAgent:
             client: Configured ConvexClient instance
         """
         self._convex_client = client
+
+    def set_managing_agent(self, agent: ManagingAgent) -> None:
+        """Set the managing agent for intelligent splitting.
+
+        Args:
+            agent: Configured ManagingAgent instance
+        """
+        self._managing_agent = agent
+        logger.info("Managing agent enabled for intelligent branch splitting")
+
+    @property
+    def managing_agent(self) -> ManagingAgent | None:
+        """Get the managing agent if configured."""
+        return self._managing_agent
 
     @property
     def convex_client(self) -> ConvexClient | None:
@@ -269,11 +288,21 @@ class MasterAgent:
             )
 
         # Auto-management checks
-        if self.auto_split and self.branch_manager.should_split(branch):
+        # Use managing agent for intelligent splitting if available
+        if self._managing_agent:
+            recommendation = await self._consult_managing_agent(branch)
+            if recommendation and recommendation.should_split:
+                logger.info(
+                    f"Managing agent recommends split for branch {branch_id}: "
+                    f"{recommendation.reasoning[:100]}..."
+                )
+                await self._execute_managed_split(branch_id, recommendation)
+        elif self.auto_split and self.branch_manager.should_split(branch):
+            # Fall back to context-threshold splitting
             logger.info(f"Auto-splitting branch {branch_id} (context threshold reached)")
             await self.split_branch(branch_id, "by_field")
 
-        elif self.auto_hypothesis and self.branch_manager.should_enable_hypothesis_mode(branch):
+        if self.auto_hypothesis and self.branch_manager.should_enable_hypothesis_mode(branch):
             logger.info(f"Auto-enabling hypothesis mode for branch {branch_id}")
             self.switch_mode(branch_id, InnerLoopMode.HYPOTHESIS)
 
@@ -579,6 +608,104 @@ class MasterAgent:
 
         return sorted_hypotheses[:n]
 
+    async def _consult_managing_agent(self, branch: Branch) -> SplitRecommendation | None:
+        """
+        Consult the managing agent about whether to split a branch.
+
+        Args:
+            branch: Branch to evaluate
+
+        Returns:
+            SplitRecommendation if the agent has a recommendation, None otherwise
+        """
+        if not self._managing_agent:
+            return None
+
+        try:
+            return await self._managing_agent.evaluate_branch(branch)
+        except Exception as e:
+            logger.error(f"Error consulting managing agent: {e}")
+            return None
+
+    async def _execute_managed_split(
+        self,
+        branch_id: str,
+        recommendation: SplitRecommendation,
+    ) -> list[str]:
+        """
+        Execute a split based on the managing agent's recommendation.
+
+        Args:
+            branch_id: ID of the branch to split
+            recommendation: SplitRecommendation from managing agent
+
+        Returns:
+            List of new branch IDs
+        """
+        from .models import BranchStatus
+
+        if not self._current_state:
+            raise RuntimeError("No active loop. Call start_loop() first.")
+
+        branch = self._current_state.get_branch(branch_id)
+        if not branch:
+            raise ValueError(f"Branch not found: {branch_id}")
+
+        logger.info(
+            f"Executing managed split for branch {branch_id}: "
+            f"{recommendation.num_branches} branches"
+        )
+
+        # Create new branches based on recommendation
+        new_branches = []
+        for i, (paper_ids, query, label) in enumerate(zip(
+            recommendation.paper_groups,
+            recommendation.group_queries,
+            recommendation.group_labels,
+        )):
+            # Create child branch
+            child = self.branch_manager.create_branch(
+                query=query,
+                mode=branch.mode,
+                parent_branch_id=branch.id,
+            )
+
+            # Copy relevant papers from parent
+            for paper_id in paper_ids:
+                if paper_id in branch.accumulated_papers:
+                    child.accumulated_papers[paper_id] = branch.accumulated_papers[paper_id]
+                if paper_id in branch.accumulated_summaries:
+                    child.accumulated_summaries[paper_id] = branch.accumulated_summaries[paper_id]
+
+            new_branches.append(child)
+            logger.info(
+                f"Created child branch {child.id}: '{label}' "
+                f"with {len(paper_ids)} papers"
+            )
+
+        # Add new branches to state
+        for new_branch in new_branches:
+            self._current_state.add_branch(new_branch)
+
+        # Mark original branch as completed (split)
+        branch.status = BranchStatus.COMPLETED
+        branch.updated_at = datetime.now()
+
+        # Save state
+        self.state_store.save_state(self._current_state)
+
+        # Emit Convex events for new branches
+        if self._convex_client:
+            for new_branch in new_branches:
+                await self._convex_client.emit_branch_created(
+                    branch_id=new_branch.id,
+                    query=new_branch.query,
+                    mode=new_branch.mode.value,
+                    parent_id=branch_id,
+                )
+
+        return [b.id for b in new_branches]
+
 
 class ResearchSession:
     """
@@ -601,6 +728,7 @@ class ResearchSession:
         config: ProfileConfig,
         initial_query: str,
         convex_client: ConvexClient | None = None,
+        use_managing_agent: bool = False,
     ):
         """
         Initialize a research session.
@@ -609,6 +737,7 @@ class ResearchSession:
             config: Profile configuration
             initial_query: Initial research query
             convex_client: Optional Convex client for realtime streaming
+            use_managing_agent: Whether to use the managing agent for intelligent splitting
         """
         self.config = config
         self.initial_query = initial_query
@@ -616,6 +745,8 @@ class ResearchSession:
         self._summarizer = None
         self._master_agent = None
         self._convex_client = convex_client
+        self._use_managing_agent = use_managing_agent
+        self._managing_agent_adapter = None
 
     async def __aenter__(self) -> ResearchSession:
         from ..semantic_scholar import SemanticScholarAdapter
@@ -645,6 +776,21 @@ class ResearchSession:
         if self._convex_client and self._convex_client.enabled:
             self._master_agent.set_convex_client(self._convex_client)
 
+        # Set up managing agent if requested
+        if self._use_managing_agent:
+            from .managing_agent import ManagingAgent
+            from ..llm.adapters import AnthropicAdapter
+
+            managing_config = self.config.research_loop.master_agent.managing_agent
+            self._managing_agent_adapter = AnthropicAdapter(model=managing_config.model)
+            await self._managing_agent_adapter.__aenter__()
+
+            managing_agent = ManagingAgent(
+                llm_adapter=self._managing_agent_adapter,
+                config=managing_config,
+            )
+            self._master_agent.set_managing_agent(managing_agent)
+
         # Start the loop
         self._master_agent.start_loop(self.initial_query)
 
@@ -663,6 +809,10 @@ class ResearchSession:
         if self._convex_client and self._convex_client.enabled:
             status = "failed" if exc_type else "completed"
             await self._convex_client.update_session_status(status)
+
+        # Close managing agent adapter if it exists
+        if self._managing_agent_adapter:
+            await self._managing_agent_adapter.__aexit__(exc_type, exc_val, exc_tb)
 
         # Close summarizer if it has async context
         if self._summarizer and hasattr(self._summarizer, '__aexit__'):

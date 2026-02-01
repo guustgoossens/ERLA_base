@@ -49,3 +49,17 @@ export const getLatest = query({
     return events;
   },
 });
+
+export const getAllForSession = query({
+  args: {
+    sessionId: v.id("sessions"),
+  },
+  handler: async (ctx, args) => {
+    const events = await ctx.db
+      .query("events")
+      .withIndex("by_session_created", (q) => q.eq("sessionId", args.sessionId))
+      .order("asc")
+      .collect();
+    return events;
+  },
+});

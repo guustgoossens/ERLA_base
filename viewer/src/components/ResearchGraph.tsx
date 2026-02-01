@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect, useState, useMemo } from "react";
 import { useQuery } from "convex/react";
 import ForceGraph3D from "react-force-graph-3d";
 import * as THREE from "three";
@@ -7,6 +7,9 @@ import { Id } from "../../convex/_generated/dataModel";
 import { DetailPanel } from "./DetailPanel";
 import { EventFeed } from "./EventFeed";
 import { StatsPanel } from "./StatsPanel";
+import { ReplayControls } from "./ReplayControls";
+import { useReplayController } from "../hooks/useReplayController";
+import { useReplayGraph } from "../hooks/useReplayGraph";
 
 interface ResearchGraphProps {
   sessionId: Id<"sessions">;
@@ -34,10 +37,53 @@ type LinkData = {
 export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
   const graphData = useQuery(api.graph.getFullGraph, { sessionId });
   const session = useQuery(api.sessions.getById, { id: sessionId });
+  const allEvents = useQuery(api.events.getAllForSession, { sessionId });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [isReplayMode, setIsReplayMode] = useState(false);
+  const [replayTime, setReplayTime] = useState<number | null>(null);
+
+  // Calculate time bounds from graph node createdAt timestamps
+  const timeBounds = useMemo(() => {
+    if (!graphData || graphData.nodes.length === 0) {
+      const now = Date.now();
+      return { startTime: now, endTime: now };
+    }
+    const times = graphData.nodes
+      .map((n) => n.data.createdAt as number | undefined)
+      .filter((t): t is number => t !== undefined);
+
+    if (times.length === 0) {
+      const now = Date.now();
+      return { startTime: now, endTime: now };
+    }
+
+    return {
+      startTime: Math.min(...times),
+      endTime: Math.max(...times),
+    };
+  }, [graphData]);
+
+  // Initialize replay controller
+  const { state: replayState, actions: replayActions } = useReplayController({
+    startTime: timeBounds.startTime,
+    endTime: timeBounds.endTime,
+    onTimeUpdate: setReplayTime,
+  });
+
+  // Get filtered graph data for replay
+  const { filteredGraph } = useReplayGraph(
+    graphData,
+    allEvents,
+    replayTime ?? timeBounds.endTime
+  );
+
+  // Use filtered graph in replay mode, full graph otherwise
+  const displayGraph = isReplayMode ? filteredGraph : graphData;
+  const displayStats = isReplayMode ? filteredGraph.stats : graphData?.stats;
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -53,6 +99,23 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
     window.addEventListener("resize", updateDimensions);
     return () => window.removeEventListener("resize", updateDimensions);
   }, []);
+
+  // Auto-enable replay mode for completed sessions
+  useEffect(() => {
+    if (session?.status === "completed" && !isReplayMode) {
+      // Session is completed, user can enable replay
+    }
+  }, [session?.status, isReplayMode]);
+
+  const handleToggleReplayMode = useCallback(() => {
+    setIsReplayMode((prev) => {
+      if (!prev) {
+        // Entering replay mode - reset to start
+        replayActions.reset();
+      }
+      return !prev;
+    });
+  }, [replayActions]);
 
   const handleNodeClick = useCallback(
     (node: NodeData) => {
@@ -184,6 +247,8 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
     );
   }
 
+  const canReplay = session.status === "completed" && allEvents && allEvents.length > 0;
+
   return (
     <div className="flex h-screen bg-gray-900">
       {/* Left sidebar - Stats */}
@@ -203,30 +268,45 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
           </h2>
           <div
             className={`inline-flex items-center gap-2 mt-2 px-2 py-1 rounded text-sm ${
-              session.status === "running"
-                ? "bg-cyan-900 text-cyan-300 status-running"
-                : session.status === "completed"
-                  ? "bg-green-900 text-green-300"
-                  : session.status === "failed"
-                    ? "bg-red-900 text-red-300"
-                    : "bg-gray-700 text-gray-300"
+              isReplayMode
+                ? "bg-purple-900 text-purple-300"
+                : session.status === "running"
+                  ? "bg-cyan-900 text-cyan-300 status-running"
+                  : session.status === "completed"
+                    ? "bg-green-900 text-green-300"
+                    : session.status === "failed"
+                      ? "bg-red-900 text-red-300"
+                      : "bg-gray-700 text-gray-300"
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full ${
-                session.status === "running"
-                  ? "bg-cyan-400"
-                  : session.status === "completed"
-                    ? "bg-green-400"
-                    : session.status === "failed"
-                      ? "bg-red-400"
-                      : "bg-gray-400"
+                isReplayMode
+                  ? "bg-purple-400"
+                  : session.status === "running"
+                    ? "bg-cyan-400"
+                    : session.status === "completed"
+                      ? "bg-green-400"
+                      : session.status === "failed"
+                        ? "bg-red-400"
+                        : "bg-gray-400"
               }`}
             />
-            {session.status}
+            {isReplayMode ? "Replay" : session.status}
           </div>
         </div>
-        <StatsPanel stats={graphData.stats} />
+        <StatsPanel stats={displayStats ?? graphData.stats} />
+
+        {/* Replay Controls at bottom of left sidebar */}
+        <div className="mt-auto">
+          <ReplayControls
+            state={replayState}
+            actions={replayActions}
+            isReplayMode={isReplayMode}
+            onToggleReplayMode={handleToggleReplayMode}
+            disabled={!canReplay}
+          />
+        </div>
       </div>
 
       {/* Main graph area */}
@@ -237,8 +317,8 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
             width={dimensions.width}
             height={dimensions.height}
             graphData={{
-              nodes: graphData.nodes as NodeData[],
-              links: graphData.links as LinkData[],
+              nodes: (displayGraph?.nodes ?? []) as NodeData[],
+              links: (displayGraph?.links ?? []) as LinkData[],
             }}
             nodeThreeObject={nodeThreeObject}
             nodeLabel={nodeLabel}
@@ -256,13 +336,24 @@ export function ResearchGraph({ sessionId, onBack }: ResearchGraphProps) {
             cooldownTime={3000}
             enablePointerInteraction={true}
           />
+
+          {/* Replay mode indicator */}
+          {isReplayMode && (
+            <div className="absolute top-4 left-4 bg-purple-900/80 text-purple-200 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+              Replay Mode - {Math.round(replayState.progress * 100)}%
+            </div>
+          )}
         </div>
       </div>
 
       {/* Right sidebar - Details & Events */}
       <div className="w-80 border-l border-gray-700 flex flex-col">
         <DetailPanel node={selectedNode} />
-        <EventFeed sessionId={sessionId} />
+        <EventFeed
+          sessionId={sessionId}
+          replayTime={isReplayMode ? replayTime ?? undefined : undefined}
+        />
       </div>
     </div>
   );

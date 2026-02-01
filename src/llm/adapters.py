@@ -231,3 +231,61 @@ class AnthropicAdapter(LLMProvider):
         )
 
         return message.content[0].text if message.content else ""
+
+    async def complete_with_tools(
+        self,
+        prompt: str,
+        tools: list[dict],
+        system_prompt: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> dict:
+        """Generate a completion with tool use support.
+
+        Args:
+            prompt: User prompt
+            tools: List of tool definitions in Anthropic format
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            Dict containing:
+                - content: Text content from the response
+                - tool_use: List of tool use blocks if any
+                - stop_reason: Why generation stopped
+        """
+        logger.info(f"Completing with tools ({len(tools)} tools) using {self.model}")
+
+        message = await self.client.messages.create(
+            model=self.model,
+            max_tokens=max_tokens or 4096,
+            system=system_prompt or "",
+            messages=[{"role": "user", "content": prompt}],
+            tools=tools,
+            temperature=temperature,
+        )
+
+        # Parse response
+        result = {
+            "content": "",
+            "tool_use": [],
+            "stop_reason": message.stop_reason,
+        }
+
+        for block in message.content:
+            if block.type == "text":
+                result["content"] += block.text
+            elif block.type == "tool_use":
+                result["tool_use"].append({
+                    "id": block.id,
+                    "name": block.name,
+                    "input": block.input,
+                })
+
+        logger.info(
+            f"Tool completion received: {len(result['tool_use'])} tool calls, "
+            f"stop_reason={message.stop_reason}"
+        )
+
+        return result
