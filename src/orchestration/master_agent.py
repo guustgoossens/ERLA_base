@@ -294,7 +294,11 @@ class MasterAgent:
         # Auto-management checks
         # Use managing agent for autonomous decisions if available
         if self._managing_agent:
-            recommendation = await self._consult_managing_agent(branch)
+            # Force evaluation if no new papers were found (stall detection)
+            force_eval = len(result.papers_found) == 0 and len(branch.iterations) > 1
+            if force_eval:
+                logger.info(f"No new papers found for branch {branch_id}, forcing managing agent evaluation")
+            recommendation = await self._consult_managing_agent(branch, force=force_eval)
             if recommendation:
                 await self._execute_agent_decision(branch_id, recommendation)
         elif self.auto_split:
@@ -523,6 +527,7 @@ class MasterAgent:
         self,
         max_iterations: int = 10,
         stop_on_hypotheses: int = 0,
+        max_consecutive_empty: int = 3,
     ) -> LoopState:
         """
         Run the loop automatically until stopping conditions are met.
@@ -530,6 +535,7 @@ class MasterAgent:
         Args:
             max_iterations: Maximum total iterations across all branches
             stop_on_hypotheses: Stop when this many hypotheses are generated (0=disabled)
+            max_consecutive_empty: Max empty iterations before marking branch stalled
 
         Returns:
             Final loop state
@@ -540,6 +546,8 @@ class MasterAgent:
             raise RuntimeError("No active loop. Call start_loop() first.")
 
         total_iterations = 0
+        # Track consecutive empty iterations per branch
+        empty_iteration_counts: dict[str, int] = {}
 
         while total_iterations < max_iterations:
             # Find next branch to process
@@ -558,6 +566,32 @@ class MasterAgent:
                     f"branch={branch.id}, papers={len(result.papers_found)}, "
                     f"summaries={len(result.summaries)}"
                 )
+
+                # Track empty iterations for stall detection
+                if not result.papers_found:
+                    empty_iteration_counts[branch.id] = empty_iteration_counts.get(branch.id, 0) + 1
+                    consecutive_empty = empty_iteration_counts[branch.id]
+
+                    if consecutive_empty >= max_consecutive_empty:
+                        logger.info(
+                            f"Branch {branch.id} stalled: {consecutive_empty} consecutive "
+                            f"empty iterations. Marking as completed."
+                        )
+                        branch.status = BranchStatus.COMPLETED
+                        branch.updated_at = datetime.now()
+
+                        # Emit status change event
+                        if self._convex_client:
+                            await self._convex_client.emit_branch_status_changed(
+                                branch_id=branch.id,
+                                status=branch.status.value,
+                                context_used=branch.context_window_used,
+                                paper_count=branch.total_papers,
+                                summary_count=branch.total_summaries,
+                            )
+                else:
+                    # Reset counter on successful iteration
+                    empty_iteration_counts[branch.id] = 0
 
             except Exception as e:
                 logger.error(f"Error running iteration on branch {branch.id}: {e}")
@@ -683,12 +717,15 @@ class MasterAgent:
                 f"{branch.total_summaries} summaries"
             )
 
-    async def _consult_managing_agent(self, branch: Branch) -> SplitRecommendation | None:
+    async def _consult_managing_agent(
+        self, branch: Branch, force: bool = False
+    ) -> SplitRecommendation | None:
         """
         Consult the managing agent about whether to split a branch.
 
         Args:
             branch: Branch to evaluate
+            force: If True, force evaluation regardless of interval
 
         Returns:
             SplitRecommendation if the agent has a recommendation, None otherwise
@@ -697,7 +734,7 @@ class MasterAgent:
             return None
 
         try:
-            return await self._managing_agent.evaluate_branch(branch)
+            return await self._managing_agent.evaluate_branch(branch, force=force)
         except Exception as e:
             logger.error(f"Error consulting managing agent: {e}")
             return None
