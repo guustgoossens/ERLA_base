@@ -255,13 +255,46 @@ class AnthropicAdapter(LLMProvider):
                 - tool_use: List of tool use blocks if any
                 - stop_reason: Why generation stopped
         """
+        messages = [{"role": "user", "content": prompt}]
+        return await self.complete_with_tools_messages(
+            messages=messages,
+            tools=tools,
+            system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    async def complete_with_tools_messages(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        system_prompt: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> dict:
+        """Generate a completion with tool use support for multi-turn conversations.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            tools: List of tool definitions in Anthropic format
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+
+        Returns:
+            Dict containing:
+                - content: Text content from the response
+                - tool_use: List of tool use blocks if any
+                - stop_reason: Why generation stopped
+                - raw_content: Raw content blocks for continuing conversation
+        """
         logger.info(f"Completing with tools ({len(tools)} tools) using {self.model}")
 
         message = await self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens or 4096,
             system=system_prompt or "",
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             tools=tools,
             temperature=temperature,
         )
@@ -271,6 +304,7 @@ class AnthropicAdapter(LLMProvider):
             "content": "",
             "tool_use": [],
             "stop_reason": message.stop_reason,
+            "raw_content": message.content,  # Keep raw for continuing conversation
         }
 
         for block in message.content:
