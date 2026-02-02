@@ -266,12 +266,13 @@ class ManagingAgent:
         # Cache for clustering results (to avoid re-computing)
         self._cluster_cache: dict[str, dict] = {}
 
-    def should_evaluate(self, branch: Branch) -> bool:
+    def should_evaluate(self, branch: Branch, force: bool = False) -> bool:
         """
         Check if a branch should be evaluated for splitting.
 
         Args:
             branch: Branch to check
+            force: If True, bypass interval check (used for stall detection)
 
         Returns:
             True if evaluation should occur
@@ -279,6 +280,10 @@ class ManagingAgent:
         # Need minimum papers
         if len(branch.accumulated_papers) < self.min_papers:
             return False
+
+        # Force evaluation bypasses interval check
+        if force:
+            return True
 
         # Check evaluation interval
         branch_evals = self._evaluation_count.get(branch.id, 0)
@@ -313,7 +318,7 @@ class ManagingAgent:
         else:
             return (f"Low ({utilization:.0%})", None)
 
-    async def evaluate_branch(self, branch: Branch) -> SplitRecommendation | None:
+    async def evaluate_branch(self, branch: Branch, force: bool = False) -> SplitRecommendation | None:
         """
         Evaluate a branch and make an autonomous decision about next steps.
 
@@ -322,11 +327,12 @@ class ManagingAgent:
 
         Args:
             branch: Branch to evaluate
+            force: If True, force evaluation regardless of interval
 
         Returns:
             SplitRecommendation with the decision and reasoning
         """
-        if not self.should_evaluate(branch):
+        if not self.should_evaluate(branch, force=force):
             return None
 
         logger.info(f"Managing agent evaluating branch {branch.id}")
@@ -338,42 +344,164 @@ class ManagingAgent:
         # Create the enhanced prompt
         prompt = self._build_autonomous_prompt(branch, context, context_status, context_warning)
 
+        # Track that we evaluated
+        self._evaluation_count[branch.id] = self._evaluation_count.get(branch.id, 0) + 1
+
         try:
-            # Call Claude Opus with tool use
-            response = await self.llm.complete_with_tools(
-                prompt=prompt,
-                tools=[CLUSTER_PAPERS_TOOL, GET_BRANCH_CONTEXT_TOOL, MAKE_DECISION_TOOL],
-                system_prompt=self._get_system_prompt(),
-                temperature=0.3,  # Lower temperature for more consistent decisions
-                max_tokens=4096,
-            )
+            # Run agentic loop until we get a decision
+            tools = [CLUSTER_PAPERS_TOOL, GET_BRANCH_CONTEXT_TOOL, MAKE_DECISION_TOOL]
+            messages = [{"role": "user", "content": prompt}]
+            max_turns = 5  # Prevent infinite loops
 
-            # Track that we evaluated
-            self._evaluation_count[branch.id] = self._evaluation_count.get(branch.id, 0) + 1
+            for turn in range(max_turns):
+                # Call Claude Opus with tool use
+                response = await self.llm.complete_with_tools_messages(
+                    messages=messages,
+                    tools=tools,
+                    system_prompt=self._get_system_prompt(),
+                    temperature=0.3,
+                    max_tokens=4096,
+                )
 
-            # Parse the tool use response
-            if response["tool_use"]:
-                # Find the decision tool call
-                decision_call = None
-                for tool_call in response["tool_use"]:
-                    if tool_call["name"] == "make_branch_decision":
-                        decision_call = tool_call
+                # Check if we got a decision
+                if response["tool_use"]:
+                    # Check for the decision tool
+                    decision_call = None
+                    tool_results = []
+
+                    for tool_call in response["tool_use"]:
+                        if tool_call["name"] == "make_branch_decision":
+                            decision_call = tool_call
+                            break
+                        else:
+                            # Execute the tool and collect result
+                            result = self._execute_tool(tool_call, branch)
+                            tool_results.append({
+                                "tool_use_id": tool_call["id"],
+                                "content": result,
+                            })
+
+                    if decision_call:
+                        return self._parse_decision_response(decision_call, branch, context_warning)
+
+                    # No decision yet - add assistant message and tool results, continue loop
+                    if tool_results:
+                        # Add the assistant's response (with tool calls) to messages
+                        # Convert raw content blocks to serializable format
+                        assistant_content = []
+                        for block in response["raw_content"]:
+                            if block.type == "text":
+                                assistant_content.append({
+                                    "type": "text",
+                                    "text": block.text,
+                                })
+                            elif block.type == "tool_use":
+                                assistant_content.append({
+                                    "type": "tool_use",
+                                    "id": block.id,
+                                    "name": block.name,
+                                    "input": block.input,
+                                })
+
+                        messages.append({
+                            "role": "assistant",
+                            "content": assistant_content,
+                        })
+                        # Add tool results
+                        messages.append({
+                            "role": "user",
+                            "content": [
+                                {"type": "tool_result", **tr} for tr in tool_results
+                            ],
+                        })
+                        logger.debug(f"Managing agent turn {turn + 1}: executed {len(tool_results)} tools, continuing...")
+                    else:
+                        # No tools executed and no decision - something's wrong
+                        logger.warning("Managing agent called tools but none were executable")
                         break
 
-                if decision_call:
-                    return self._parse_decision_response(decision_call, branch, context_warning)
+                elif response["stop_reason"] == "end_turn":
+                    # Agent finished without using decision tool - extract any text reasoning
+                    logger.warning("Managing agent ended turn without making a decision")
+                    # Default to continue if no decision was made
+                    return SplitRecommendation.continue_exploring(
+                        reasoning="Agent did not make explicit decision - defaulting to continue",
+                        context_warning=context_warning,
+                    )
                 else:
-                    # Agent used other tools but didn't make a decision
-                    # This shouldn't happen with a good prompt, but handle it
-                    logger.warning("Managing agent used tools but didn't make a decision")
-                    return None
-            else:
-                logger.warning("Managing agent did not use any tools")
-                return None
+                    logger.warning(f"Unexpected response from managing agent: {response['stop_reason']}")
+                    break
+
+            # Max turns reached without decision
+            logger.warning(f"Managing agent reached max turns ({max_turns}) without decision")
+            return SplitRecommendation.continue_exploring(
+                reasoning="Agent reached max turns without decision - defaulting to continue",
+                context_warning=context_warning,
+            )
 
         except Exception as e:
             logger.error(f"Error evaluating branch with managing agent: {e}")
             return None
+
+    def _execute_tool(self, tool_call: dict, branch: Branch) -> str:
+        """
+        Execute a tool call and return the result as a string.
+
+        Args:
+            tool_call: Tool call dict with 'name' and 'input'
+            branch: Current branch for context
+
+        Returns:
+            JSON string result of the tool execution
+        """
+        tool_name = tool_call["name"]
+        tool_input = tool_call.get("input", {})
+
+        try:
+            if tool_name == "cluster_papers":
+                criterion = tool_input.get("criterion", "topic")
+                clusters = self._cluster_papers_by_criterion(branch, criterion)
+                result = {
+                    "criterion": criterion,
+                    "clusters": {
+                        label: {
+                            "paper_ids": paper_ids,
+                            "count": len(paper_ids),
+                        }
+                        for label, paper_ids in clusters.items()
+                    },
+                    "total_papers": len(branch.accumulated_papers),
+                }
+                logger.debug(f"Clustered papers by {criterion}: {len(clusters)} clusters")
+                return json.dumps(result, indent=2)
+
+            elif tool_name == "get_branch_context":
+                # For now, return info about the current branch
+                # In a full implementation, this would fetch sibling branch info
+                include_siblings = tool_input.get("include_siblings", True)
+                context_info = {
+                    "current_branch": {
+                        "id": branch.id,
+                        "query": branch.query,
+                        "paper_count": len(branch.accumulated_papers),
+                        "summary_count": len(branch.accumulated_summaries),
+                        "iteration_count": len(branch.iterations),
+                        "mode": branch.mode.value if hasattr(branch.mode, 'value') else str(branch.mode),
+                    },
+                    "parent_branch_id": branch.parent_branch_id,
+                    "siblings": [],  # Would be populated if we had access to sibling branches
+                }
+                if include_siblings:
+                    context_info["note"] = "Sibling branch information not available in current context"
+                logger.debug(f"Retrieved branch context for {branch.id}")
+                return json.dumps(context_info, indent=2)
+
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+        except Exception as e:
+            logger.error(f"Error executing tool {tool_name}: {e}")
+            return json.dumps({"error": str(e)})
 
     def _build_evaluation_context(self, branch: Branch) -> dict[str, Any]:
         """Build context dict from branch papers and summaries."""
@@ -415,6 +543,13 @@ class ManagingAgent:
         # Compute time range
         time_range = f"{min(years)}-{max(years)}" if years else "Unknown"
 
+        # Check for stalled state (recent iterations found no new papers)
+        recent_iterations = branch.iterations[-3:] if branch.iterations else []
+        recent_empty_count = sum(
+            1 for it in recent_iterations if not it.papers_found
+        )
+        is_stalled = recent_empty_count >= 2 and len(branch.iterations) > 1
+
         return {
             "branch_id": branch.id,
             "query": branch.query,
@@ -425,6 +560,8 @@ class ManagingAgent:
             "topic_summary": topic_summary or "Not enough data",
             "time_range": time_range,
             "parent_branch_id": branch.parent_branch_id,
+            "is_stalled": is_stalled,
+            "recent_empty_iterations": recent_empty_count,
         }
 
     def _build_autonomous_prompt(
@@ -452,6 +589,20 @@ class ManagingAgent:
 Note: This is a soft warning, not a forced action. Use your judgment about what's best for the research.
 """
 
+        stall_section = ""
+        if context.get("is_stalled"):
+            stall_section = f"""
+## IMPORTANT: Citation Graph Exhausted
+The last {context.get('recent_empty_iterations', 0)} iterations found NO new papers. The citation graph for this query appears to be exhausted.
+
+You should strongly consider:
+1. **Wrap up** this branch if you have sufficient coverage for synthesis
+2. **Split** into sub-branches with more specific queries to find new papers
+3. Only **continue** if you believe there's a specific reason more papers might appear
+
+Do NOT recommend "continue" if papers have stopped appearing - this wastes resources.
+"""
+
         return f"""You are managing a research branch exploring: "{context['query']}"
 
 ## Current State
@@ -461,7 +612,7 @@ Note: This is a soft warning, not a forced action. Use your judgment about what'
 - Context usage: {context_status}
 - Iterations completed: {context['iteration_count']}
 - Parent branch: {context['parent_branch_id'] or 'None (root branch)'}
-{warning_section}
+{warning_section}{stall_section}
 ## Papers in this branch:
 {papers_text}
 
