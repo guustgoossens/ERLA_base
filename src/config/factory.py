@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from ..llm.protocols import LLMProvider
     from ..halugate.protocols import HallucinationDetectorProtocol
     from ..orchestration.overseer import Overseer
-    from .loader import ProfileConfig, SummarizerConfig, HaluGateConfig, OverseerConfig
+    from .loader import ProfileConfig, SummarizerConfig, HaluGateConfig, OverseerConfig, PaperSourcesConfig
 
 
 class MockLLMProvider:
@@ -382,3 +382,63 @@ def create_reflection_agent(
         search_provider=search_provider,
         config=config,
     )
+
+
+def create_paper_provider(
+    config: "PaperSourcesConfig",
+    semantic_scholar_api_key: str | None = None,
+) -> tuple:
+    """
+    Create paper search and citation providers from configuration.
+
+    Args:
+        config: Paper sources configuration
+        semantic_scholar_api_key: Optional SS API key
+
+    Returns:
+        Tuple of (search_provider, citation_provider)
+    """
+    from ..semantic_scholar.adapters import SemanticScholarAdapter
+    from ..arxiv.adapters import ArXivAdapter
+    from ..paper_sources.composite import CompositeSearchProvider
+    from ..paper_sources.bridge import ArXivCitationBridge
+
+    providers: list = []
+    ss_adapter: SemanticScholarAdapter | None = None
+
+    # Create requested providers
+    if "semantic_scholar" in config.providers:
+        ss_adapter = SemanticScholarAdapter(api_key=semantic_scholar_api_key)
+        providers.append(ss_adapter)
+
+    if "arxiv" in config.providers:
+        arxiv_adapter = ArXivAdapter(
+            categories=config.arxiv_categories,
+            rate_limit_seconds=config.arxiv_rate_limit,
+        )
+        providers.append(arxiv_adapter)
+
+    # Determine citation provider
+    citation_provider: SemanticScholarAdapter | ArXivCitationBridge
+    if ss_adapter:
+        # Semantic Scholar has native citations
+        citation_provider = ss_adapter
+    else:
+        # arXiv-only: need to create SS adapter for citation bridge
+        ss_for_citations = SemanticScholarAdapter(api_key=semantic_scholar_api_key)
+        citation_provider = ArXivCitationBridge(ss_for_citations)
+
+    # Single provider case
+    if len(providers) == 1 and config.strategy == "single":
+        search_provider = providers[0]
+    else:
+        # Composite provider
+        search_provider = CompositeSearchProvider(
+            providers=providers,
+            citation_provider=citation_provider,
+            strategy=config.strategy,
+            deduplicate=config.deduplication,
+            prefer_provider=config.prefer_provider,
+        )
+
+    return search_provider, citation_provider

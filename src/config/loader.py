@@ -122,6 +122,17 @@ class SearchConfig(BaseModel):
     min_papers_before_split: int = 5  # Suggestion before considering split
 
 
+class PaperSourcesConfig(BaseModel):
+    """Configuration for paper search providers."""
+
+    providers: list[Literal["semantic_scholar", "arxiv"]] = ["semantic_scholar"]
+    strategy: Literal["parallel", "fallback", "single"] = "single"
+    deduplication: bool = True
+    prefer_provider: Literal["semantic_scholar", "arxiv"] = "semantic_scholar"
+    arxiv_categories: list[str] | None = None  # e.g., ["cs.LG", "cs.AI"]
+    arxiv_rate_limit: float = 3.0  # Seconds between arXiv requests
+
+
 class MasterAgentConfig(BaseModel):
     """Configuration for the Master Agent (Layer 3)."""
 
@@ -154,6 +165,7 @@ class ProfileConfig(BaseModel):
     halugate: HaluGateConfig
     overseer: OverseerConfig = OverseerConfig()
     research_loop: ResearchLoopConfig = ResearchLoopConfig()
+    paper_sources: PaperSourcesConfig = PaperSourcesConfig()
 
 
 class ConfigFile(BaseModel):
