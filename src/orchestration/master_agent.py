@@ -844,6 +844,8 @@ class ResearchSession:
         use_managing_agent: bool = False,
         filters: SearchFilters | None = None,
         parameters: dict[str, Any] | None = None,
+        sources: list[str] | None = None,
+        arxiv_categories: list[str] | None = None,
     ):
         """
         Initialize a research session.
@@ -855,10 +857,13 @@ class ResearchSession:
             use_managing_agent: Whether to use the managing agent for intelligent splitting
             filters: Optional search filters for paper retrieval
             parameters: Optional research parameters to store in Convex
+            sources: Paper sources to use (e.g., ["semantic_scholar", "arxiv"])
+            arxiv_categories: arXiv category filters (e.g., ["cs.LG", "cs.AI"])
         """
         self.config = config
         self.initial_query = initial_query
         self._adapter = None
+        self._citation_provider = None
         self._summarizer = None
         self._master_agent = None
         self._convex_client = convex_client
@@ -866,13 +871,29 @@ class ResearchSession:
         self._managing_agent_adapter = None
         self._filters = filters
         self._parameters = parameters
+        self._sources = sources
+        self._arxiv_categories = arxiv_categories
 
     async def __aenter__(self) -> ResearchSession:
         from ..semantic_scholar import SemanticScholarAdapter
-        from ..config.factory import create_summarizer, create_halugate
+        from ..config.factory import create_summarizer, create_halugate, create_paper_provider
+        from ..config.loader import PaperSourcesConfig
 
-        # Create adapter
-        self._adapter = SemanticScholarAdapter()
+        # Create search provider (either from CLI args or config)
+        if self._sources:
+            # CLI args override config
+            strategy = "parallel" if len(self._sources) > 1 else "single"
+            paper_config = PaperSourcesConfig(
+                providers=self._sources,
+                strategy=strategy,
+                deduplication=strategy == "parallel",
+                arxiv_categories=self._arxiv_categories,
+            )
+            self._adapter, self._citation_provider = create_paper_provider(paper_config)
+        else:
+            # Use config (which may have paper_sources defined)
+            self._adapter, self._citation_provider = create_paper_provider(self.config.paper_sources)
+
         await self._adapter.__aenter__()
 
         # Create backends

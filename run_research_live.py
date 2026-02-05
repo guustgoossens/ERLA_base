@@ -7,6 +7,15 @@ for realtime visualization in the Three.js frontend.
 Usage:
     uv run python run_research_live.py "transformer attention mechanisms"
     uv run python run_research_live.py "quantum computing applications" --iterations 10
+
+    # Use arXiv as paper source
+    uv run python run_research_live.py "LLM reasoning" -s arxiv
+
+    # Use both sources (parallel search)
+    uv run python run_research_live.py "deep learning" -s semantic_scholar -s arxiv
+
+    # Filter arXiv by category
+    uv run python run_research_live.py "neural networks" -s arxiv -c cs.LG -c cs.AI
 """
 
 import asyncio
@@ -41,6 +50,8 @@ async def main(
     max_iterations: int = 5,
     use_managing_agent: bool = False,
     filters: SearchFilters | None = None,
+    sources: list[str] | None = None,
+    arxiv_categories: list[str] | None = None,
 ) -> None:
     """Run a research session with Convex streaming.
 
@@ -50,6 +61,8 @@ async def main(
         max_iterations: Maximum iterations to run
         use_managing_agent: Whether to use Claude Opus for intelligent branch splitting
         filters: Optional search filters for paper retrieval
+        sources: Paper sources to use (e.g., ["semantic_scholar", "arxiv"])
+        arxiv_categories: arXiv category filters (e.g., ["cs.LG", "cs.AI"])
     """
     # Initialize Convex client
     convex = ConvexClient()
@@ -75,6 +88,12 @@ async def main(
         if filters.end_date:
             parameters["end_date"] = filters.end_date
 
+    # Add source info if present
+    if sources:
+        parameters["sources"] = sources
+    if arxiv_categories:
+        parameters["arxiv_categories"] = arxiv_categories
+
     try:
         # Load configuration
         config = load_config(profile)
@@ -90,6 +109,8 @@ async def main(
             use_managing_agent=use_managing_agent,
             filters=filters,
             parameters=parameters,
+            sources=sources,
+            arxiv_categories=arxiv_categories,
         ) as session:
             logger.info(f"Started research session: {session.loop_id}")
             logger.info(f"Query: {query}")
@@ -168,6 +189,21 @@ if __name__ == "__main__":
         type=str,
         help="[Deprecated] Year filter (e.g., '2023-2024'). Use --start-date/--end-date instead.",
     )
+    parser.add_argument(
+        "--source",
+        "-s",
+        action="append",
+        dest="sources",
+        choices=["semantic_scholar", "arxiv"],
+        help="Paper source to use (can specify multiple: -s semantic_scholar -s arxiv)",
+    )
+    parser.add_argument(
+        "--arxiv-cat",
+        "-c",
+        action="append",
+        dest="arxiv_categories",
+        help="arXiv category filter (can specify multiple: -c cs.LG -c cs.AI)",
+    )
 
     args = parser.parse_args()
 
@@ -179,7 +215,15 @@ if __name__ == "__main__":
         filters = SearchFilters(year=args.year)
 
     try:
-        asyncio.run(main(args.query, args.profile, args.iterations, args.use_managing_agent, filters))
+        asyncio.run(main(
+            args.query,
+            args.profile,
+            args.iterations,
+            args.use_managing_agent,
+            filters,
+            args.sources,
+            args.arxiv_categories,
+        ))
     except KeyboardInterrupt:
         logger.info("\nResearch interrupted by user")
         sys.exit(0)
