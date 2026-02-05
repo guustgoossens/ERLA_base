@@ -40,3 +40,6 @@ RATE_LIMIT_REQUESTS_PER_SECOND_NO_KEY = 0.05  # Without API key (1 request per 2
 # Retry settings
 MAX_RETRIES = 7
 RETRY_BACKOFF_FACTOR = 2.0
+
+# arXiv settings
+ARXIV_RATE_LIMIT_SECONDS = float(os.getenv("ARXIV_RATE_LIMIT_SECONDS", "3.0"))
