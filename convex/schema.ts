@@ -120,6 +120,7 @@ export default defineSchema({
   // Chat Threads for research discussions
   chatThreads: defineTable({
     sessionId: v.id("sessions"),
+    agentThreadId: v.optional(v.string()), // Agent component's internal thread ID
     title: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -157,8 +158,8 @@ export default defineSchema({
       v.array(
         v.object({
           toolName: v.string(),
-          input: v.any(),
-          output: v.any(),
+          input: v.optional(v.any()),
+          output: v.optional(v.any()),
         })
       )
     ),

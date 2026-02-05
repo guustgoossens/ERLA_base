@@ -54,10 +54,10 @@ When referencing information from papers, ALWAYS cite the source:
 ## First Interaction
 When starting a conversation, use getResearchContext to understand what data is available before answering questions.`;
 
-// Create the research chat agent with Claude Sonnet 4.5
+// Create the research chat agent with Claude Sonnet
 export const researchChatAgent = new Agent(components.agent, {
   name: "ERLA Research Chat",
-  languageModel: anthropic("claude-sonnet-4-5-20250514"),
+  languageModel: anthropic("claude-sonnet-4-20250514"),
   instructions: AGENT_INSTRUCTIONS,
   tools: {
     searchPapers,
@@ -70,7 +70,7 @@ export const researchChatAgent = new Agent(components.agent, {
     recentMessages: 20,
     searchOptions: {
       limit: 10,
-      vectorSearch: true,
+      vectorSearch: false,
       textSearch: false,
     },
   },

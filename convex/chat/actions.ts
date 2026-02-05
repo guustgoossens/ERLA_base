@@ -43,8 +43,8 @@ export const createMessageInternal = internalMutation({
       v.array(
         v.object({
           toolName: v.string(),
-          input: v.any(),
-          output: v.any(),
+          input: v.optional(v.any()),
+          output: v.optional(v.any()),
         })
       )
     ),
@@ -101,8 +101,8 @@ export const updateMessageInternal = internalMutation({
       v.array(
         v.object({
           toolName: v.string(),
-          input: v.any(),
-          output: v.any(),
+          input: v.optional(v.any()),
+          output: v.optional(v.any()),
         })
       )
     ),
@@ -142,6 +142,17 @@ export const sendMessage = action({
       groundedness: number;
     }>;
   }> => {
+    // 0. Get the agent thread ID from our chatThread
+    const chatThread = await ctx.runQuery(api.chat.threads.get, {
+      threadId: args.threadId,
+    });
+    if (!chatThread) {
+      throw new Error("Chat thread not found");
+    }
+    if (!chatThread.agentThreadId) {
+      throw new Error("This is a legacy thread without agent support. Please start a new chat thread.");
+    }
+
     // 1. Store the user message
     const userMessageId = await ctx.runMutation(
       internal.chat.actions.createMessageInternal,
@@ -163,9 +174,9 @@ export const sendMessage = action({
       }
     );
 
-    // 3. Run the agent
-    const thread = await researchChatAgent.continueThread(ctx, {
-      threadId: args.threadId,
+    // 3. Run the agent using the agent's thread ID
+    const { thread } = await researchChatAgent.continueThread(ctx, {
+      threadId: chatThread.agentThreadId,
     });
 
     // Build the message with session context
@@ -281,13 +292,19 @@ export const startThread = action({
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // 1. Create a new thread
-    const threadId = await ctx.runMutation(api.chat.threads.create, {
-      sessionId: args.sessionId,
+    // 1. Create an agent thread first
+    const { threadId: agentThreadId } = await researchChatAgent.createThread(ctx, {
       title: args.title || args.message.slice(0, 50),
     });
 
-    // 2. Send the first message
+    // 2. Create our chatThread record with the agent thread ID
+    const threadId = await ctx.runMutation(api.chat.threads.create, {
+      sessionId: args.sessionId,
+      agentThreadId,
+      title: args.title || args.message.slice(0, 50),
+    });
+
+    // 3. Send the first message
     const result = await ctx.runAction(api.chat.actions.sendMessage, {
       threadId,
       sessionId: args.sessionId,

@@ -4,12 +4,14 @@ import { v } from "convex/values";
 export const create = mutation({
   args: {
     sessionId: v.id("sessions"),
+    agentThreadId: v.optional(v.string()),
     title: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     const threadId = await ctx.db.insert("chatThreads", {
       sessionId: args.sessionId,
+      agentThreadId: args.agentThreadId,
       title: args.title,
       createdAt: now,
       updatedAt: now,

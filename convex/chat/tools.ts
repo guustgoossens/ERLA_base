@@ -1,6 +1,7 @@
 import { createTool } from "@convex-dev/agent";
 import { z } from "zod";
 import type { Id } from "../_generated/dataModel";
+import { api } from "../_generated/api";
 
 /**
  * Tool: Search Papers
@@ -24,21 +25,13 @@ Returns matching papers with titles, abstracts, and groundedness scores.`,
     const limit = args.limit ?? 5;
     const sessionId = args.sessionId as Id<"sessions">;
 
-    // Get papers for the session
-    const papers = await ctx.runQuery(
-      // @ts-expect-error - Dynamic API access
-      ctx.api.papers?.search ?? "papers:search",
-      { sessionId, query: args.query, limit }
-    ).catch(async () => {
-      // Fallback: query all papers and filter client-side
-      const allPapers = await ctx.runQuery(
-        // @ts-expect-error - Dynamic API access
-        ctx.api.graph.getFullGraph,
-        { sessionId }
-      );
+    // Get papers by querying the full graph and filtering
+    let papers: Array<Record<string, unknown>> = [];
+    try {
+      const graphData = await ctx.runQuery(api.graph.getFullGraph, { sessionId });
 
       const queryLower = args.query.toLowerCase();
-      return allPapers.nodes
+      papers = graphData.nodes
         .filter((n: { type: string; data: { title?: string; abstract?: string } }) =>
           n.type === "paper" && (
             n.data.title?.toLowerCase().includes(queryLower) ||
@@ -47,7 +40,9 @@ Returns matching papers with titles, abstracts, and groundedness scores.`,
         )
         .slice(0, limit)
         .map((n: { data: Record<string, unknown> }) => n.data);
-    });
+    } catch (error) {
+      return `Error searching papers: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
 
     if (!papers || papers.length === 0) {
       return `No papers found matching "${args.query}" in this research session.`;
@@ -89,11 +84,12 @@ Returns the paper's summary along with its groundedness score.`,
     const sessionId = args.sessionId as Id<"sessions">;
 
     // Get the full graph and find the paper
-    const graphData = await ctx.runQuery(
-      // @ts-expect-error - Dynamic API access
-      ctx.api.graph.getFullGraph,
-      { sessionId }
-    );
+    let graphData;
+    try {
+      graphData = await ctx.runQuery(api.graph.getFullGraph, { sessionId });
+    } catch (error) {
+      return `Error fetching paper data: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
 
     const paperNode = graphData.nodes.find(
       (n: { type: string; id: string; data: { paperId?: string } }) =>
@@ -162,11 +158,12 @@ Returns hypotheses with confidence scores and supporting papers.`,
     const minConfidence = args.minConfidence ?? 0;
 
     // Get the full graph
-    const graphData = await ctx.runQuery(
-      // @ts-expect-error - Dynamic API access
-      ctx.api.graph.getFullGraph,
-      { sessionId }
-    );
+    let graphData;
+    try {
+      graphData = await ctx.runQuery(api.graph.getFullGraph, { sessionId });
+    } catch (error) {
+      return `Error fetching hypotheses: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
 
     let hypotheses = graphData.nodes
       .filter((n: { type: string }) => n.type === "hypothesis")
@@ -235,20 +232,16 @@ Returns session stats, branch information, and key metrics.`,
     const sessionId = args.sessionId as Id<"sessions">;
 
     // Get the full graph
-    const graphData = await ctx.runQuery(
-      // @ts-expect-error - Dynamic API access
-      ctx.api.graph.getFullGraph,
-      { sessionId }
-    );
+    let graphData;
+    let session;
+    try {
+      graphData = await ctx.runQuery(api.graph.getFullGraph, { sessionId });
+      session = await ctx.runQuery(api.sessions.getById, { id: sessionId });
+    } catch (error) {
+      return `Error fetching research context: ${error instanceof Error ? error.message : "Unknown error"}`;
+    }
 
     const { stats, nodes } = graphData;
-
-    // Get session details
-    const session = await ctx.runQuery(
-      // @ts-expect-error - Dynamic API access
-      ctx.api.sessions.getById,
-      { id: sessionId }
-    );
 
     // Calculate average groundedness
     const papers = nodes.filter((n: { type: string }) => n.type === "paper");

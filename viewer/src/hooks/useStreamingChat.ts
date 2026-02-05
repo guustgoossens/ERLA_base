@@ -90,23 +90,16 @@ export function useStreamingChat({ sessionId, threadId }: UseStreamingChatOption
     [currentThreadId, sessionId, sendMessageAction, startThreadAction]
   );
 
-  // Start a new thread
+  // Start a new thread (just clears the current thread - actual creation happens on first message)
   const startNewThread = useCallback(
-    async (title?: string) => {
-      try {
-        const threadId = await createThread({
-          sessionId,
-          title,
-        });
-        setCurrentThreadId(threadId);
-        return threadId;
-      } catch (err) {
-        console.error("[useStreamingChat] Error creating thread:", err);
-        setError(err instanceof Error ? err.message : "Failed to create thread");
-        return null;
-      }
+    async (_title?: string) => {
+      // Don't create the thread directly - let sendMessage handle it
+      // This ensures the agent thread is properly created via startThreadAction
+      setCurrentThreadId(null);
+      setError(null);
+      return null;
     },
-    [sessionId, createThread]
+    []
   );
 
   // Select an existing thread
