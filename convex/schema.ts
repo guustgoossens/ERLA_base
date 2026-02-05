@@ -115,4 +115,55 @@ export default defineSchema({
   })
     .index("by_session", ["sessionId"])
     .index("by_session_created", ["sessionId", "createdAt"]),
+
+  // Chat Threads for research discussions
+  chatThreads: defineTable({
+    sessionId: v.id("sessions"),
+    title: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_session", ["sessionId"]),
+
+  // Chat Messages with citations and validation
+  chatMessages: defineTable({
+    threadId: v.id("chatThreads"),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    citations: v.optional(
+      v.array(
+        v.object({
+          paperId: v.string(),
+          paperTitle: v.string(),
+          relevantText: v.string(),
+          groundedness: v.number(),
+        })
+      )
+    ),
+    validation: v.optional(
+      v.object({
+        isValidated: v.boolean(),
+        groundednessScore: v.number(),
+        hallucinatedSpans: v.array(
+          v.object({
+            text: v.string(),
+            start: v.number(),
+            end: v.number(),
+          })
+        ),
+      })
+    ),
+    toolCalls: v.optional(
+      v.array(
+        v.object({
+          toolName: v.string(),
+          input: v.any(),
+          output: v.any(),
+        })
+      )
+    ),
+    isStreaming: v.optional(v.boolean()),
+    createdAt: v.number(),
+  })
+    .index("by_thread", ["threadId"])
+    .index("by_thread_created", ["threadId", "createdAt"]),
 });
