@@ -438,3 +438,171 @@ profiles:
       search:
         initial_pool_size: 100    # larger pool for production
         min_papers_before_split: 10
+    paper_sources:
+      providers: ["semantic_scholar"]
+      strategy: single
+
+  # arXiv only - for preprint-focused research
+  research-arxiv:
+    summarizer:
+      backend: anthropic
+      model: claude-haiku-4-5-20251001
+      api_key: ${ANTHROPIC_API_KEY}
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 10
+        parallel_summarization: true
+        max_summarization_concurrency: 3
+      iteration_loop:
+        max_iterations_per_branch: 5
+        citation_depth: 2
+        max_citations_per_paper: 5
+        max_references_per_paper: 5
+        include_references: true
+      branch:
+        max_context_window: 200000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 5
+        max_branches: 5
+      master_agent:
+        max_parallel_branches: 3
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+      reflection:
+        enabled: true
+        min_papers_for_reflection: 5
+        auto_search_gaps: true
+        max_gap_searches: 2
+        coverage_threshold: 0.8
+        reflection_interval: 1
+      paper_selection:
+        suggested_range: [5, 20]
+        diversity_reminder: true
+      branch_splitting:
+        context_warning: 0.7
+        max_branches_suggestion: 3
+      search:
+        initial_pool_size: 30
+        min_papers_before_split: 5
+    paper_sources:
+      providers: ["arxiv"]
+      strategy: single
+      arxiv_categories: ["cs.LG", "cs.AI", "cs.CL", "cs.CV"]
+      arxiv_rate_limit: 3.0
+
+  # Combined - search both Semantic Scholar and arXiv, deduplicate results
+  research-combined:
+    summarizer:
+      backend: anthropic
+      model: claude-haiku-4-5-20251001
+      api_key: ${ANTHROPIC_API_KEY}
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 15
+        parallel_summarization: true
+        max_summarization_concurrency: 5
+      iteration_loop:
+        max_iterations_per_branch: 7
+        citation_depth: 2
+        max_citations_per_paper: 5
+        max_references_per_paper: 5
+        include_references: true
+      branch:
+        max_context_window: 200000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 8
+        max_branches: 7
+      master_agent:
+        max_parallel_branches: 4
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+      reflection:
+        enabled: true
+        min_papers_for_reflection: 5
+        auto_search_gaps: true
+        max_gap_searches: 3
+        coverage_threshold: 0.8
+        reflection_interval: 1
+      paper_selection:
+        suggested_range: [5, 25]
+        diversity_reminder: true
+      branch_splitting:
+        context_warning: 0.7
+        max_branches_suggestion: 4
+      search:
+        initial_pool_size: 40
+        min_papers_before_split: 5
+    paper_sources:
+      providers: ["semantic_scholar", "arxiv"]
+      strategy: parallel
+      deduplication: true
+      prefer_provider: semantic_scholar  # SS has citation counts
+      arxiv_categories: ["cs.LG", "cs.AI", "cs.CL"]
+      arxiv_rate_limit: 3.0
+
+  # Fallback mode - try Semantic Scholar first, fall back to arXiv
+  research-fallback:
+    summarizer:
+      backend: anthropic
+      model: claude-haiku-4-5-20251001
+      api_key: ${ANTHROPIC_API_KEY}
+    halugate:
+      backend: mock
+    overseer:
+      max_retries: 0
+    research_loop:
+      inner_loop:
+        groundedness_threshold: 0.95
+        max_papers_per_iteration: 10
+        parallel_summarization: true
+        max_summarization_concurrency: 3
+      iteration_loop:
+        max_iterations_per_branch: 5
+        citation_depth: 2
+        max_citations_per_paper: 5
+        max_references_per_paper: 5
+        include_references: true
+      branch:
+        max_context_window: 200000
+        context_split_threshold: 0.8
+        min_papers_for_hypothesis_mode: 5
+        max_branches: 5
+      master_agent:
+        max_parallel_branches: 3
+        auto_prune_enabled: true
+        auto_split_enabled: true
+        auto_hypothesis_mode: true
+      reflection:
+        enabled: true
+        min_papers_for_reflection: 5
+        auto_search_gaps: true
+        max_gap_searches: 2
+        coverage_threshold: 0.8
+        reflection_interval: 1
+      paper_selection:
+        suggested_range: [5, 20]
+        diversity_reminder: true
+      branch_splitting:
+        context_warning: 0.7
+        max_branches_suggestion: 3
+      search:
+        initial_pool_size: 30
+        min_papers_before_split: 5
+    paper_sources:
+      providers: ["semantic_scholar", "arxiv"]
+      strategy: fallback
+      deduplication: false
+      arxiv_categories: ["cs.LG", "cs.AI", "cs.CL", "cs.CV"]
+      arxiv_rate_limit: 3.0
