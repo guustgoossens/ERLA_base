@@ -12,6 +12,7 @@ export const create = mutation({
         start_date: v.optional(v.string()),
         end_date: v.optional(v.string()),
         use_managing_agent: v.optional(v.boolean()),
+        sources: v.optional(v.array(v.string())),
       })
     ),
   },

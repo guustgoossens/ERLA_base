@@ -26,3 +26,4 @@ dist-ssr
 # Symlink to root convex folder
 convex
 .vercel
+.env*.local
