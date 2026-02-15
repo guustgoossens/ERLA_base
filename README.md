@@ -103,7 +103,3 @@ The recursive Scout architecture taught us that **homogeneous agents with simple
 **Adaptive groundedness thresholds**: Dynamic thresholds based on research phase—stricter for factual claims, relaxed for hypothesis generation.
 
 **Academic paper generation**: Synthesise validated findings into properly cited academic papers with automatic bibliography generation from Semantic Scholar metadata.
-
-## Video Link
-https://www.loom.com/share/a989aa74466a436587ebe6fe7c9e29e0
-
